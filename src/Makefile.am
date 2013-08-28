@@ -8,5 +8,6 @@ ___planet_dump_ng_SOURCES=\
 	dump_reader.cpp \
 	extract_kv.cpp \
 	insert_kv.cpp \
-	planet-dump.cpp
+	planet-dump.cpp \
+	xml_writer.cpp
 

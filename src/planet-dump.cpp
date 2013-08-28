@@ -13,6 +13,7 @@
 #include "table_extractor.hpp"
 #include "types.hpp"
 #include "insert_kv.hpp"
+#include "xml_writer.hpp"
 
 namespace bt = boost::posix_time;
 namespace fs = boost::filesystem;
@@ -155,11 +156,13 @@ void extract_users(const std::string &dump_file, std::map<int64_t, std::string> 
   user u;
   display_name_map.clear();
   while (reader(u)) {
-    display_name_map.insert(std::make_pair(u.id, u.display_name));
+    if (u.data_public) {
+      display_name_map.insert(std::make_pair(u.id, u.display_name));
+    }
   }
 }
 
-void extract_changesets(const std::string &dump_file) {
+void extract_changesets(const std::string &dump_file, xml_writer &writer) {
   if (!fs::exists("changesets")) {
     extract_table<changeset>("changesets", dump_file);
   }
@@ -173,20 +176,22 @@ void extract_changesets(const std::string &dump_file) {
   current_tag cst;
   cst.element_id = 0;
   while (cs_reader(cs)) {
-    std::cout << cs << std::endl;
-
+    writer.begin(cs);
+    
     while (cst.element_id <= cs.id) {
       if (cst.element_id == cs.id) {
-        std::cout << "  " << cst << std::endl;
+        writer.add(cst);
       }
       if (!cst_reader(cst)) {
         break;
       }
     }
+
+    writer.end();
   }
 }
 
-void extract_current_nodes(const std::string &dump_file) {
+void extract_current_nodes(const std::string &dump_file, xml_writer &writer) {
   if (!fs::exists("current_nodes")) {
     extract_table<current_node>("current_nodes", dump_file);
   }
@@ -200,20 +205,22 @@ void extract_current_nodes(const std::string &dump_file) {
   current_tag nt;
   nt.element_id = 0;
   while (n_reader(n)) {
-    std::cout << n << std::endl;
+    writer.begin(n);
     
     while (nt.element_id <= n.id) {
       if (nt.element_id == n.id) {
-        std::cout << "  " << nt << std::endl;
+        writer.add(nt);
       }
       if (!nt_reader(nt)) {
         break;
       }
     }
+
+    writer.end();
   }
 }
 
-void extract_current_ways(const std::string &dump_file) {
+void extract_current_ways(const std::string &dump_file, xml_writer &writer) {
   if (!fs::exists("current_ways")) {
     extract_table<current_way>("current_ways", dump_file);
   }
@@ -233,11 +240,11 @@ void extract_current_ways(const std::string &dump_file) {
   wt.element_id = 0;
   wn.way_id = 0;
   while (w_reader(w)) {
-    std::cout << w << std::endl;
+    writer.begin(w);
     
     while (wn.way_id <= w.id) {
       if (wn.way_id == w.id) {
-        std::cout << "  " << wn << std::endl;
+        writer.add(wn);
       }
       if (!wn_reader(wn)) {
         break;
@@ -246,16 +253,18 @@ void extract_current_ways(const std::string &dump_file) {
 
     while (wt.element_id <= w.id) {
       if (wt.element_id == w.id) {
-        std::cout << "  " << wt << std::endl;
+        writer.add(wt);
       }
       if (!wt_reader(wt)) {
         break;
       }
     }
+
+    writer.end();
   }
 }
 
-void extract_current_relations(const std::string &dump_file) {
+void extract_current_relations(const std::string &dump_file, xml_writer &writer) {
   if (!fs::exists("current_relations")) {
     extract_table<current_relation>("current_relations", dump_file);
   }
@@ -275,11 +284,11 @@ void extract_current_relations(const std::string &dump_file) {
   rt.element_id = 0;
   rm.relation_id = 0;
   while (r_reader(r)) {
-    std::cout << r << std::endl;
+    writer.begin(r);
     
     while (rm.relation_id <= r.id) {
       if (rm.relation_id == r.id) {
-        std::cout << "  " << rm << std::endl;
+        writer.add(rm);
       }
       if (!rm_reader(rm)) {
         break;
@@ -288,12 +297,14 @@ void extract_current_relations(const std::string &dump_file) {
 
     while (rt.element_id <= r.id) {
       if (rt.element_id == r.id) {
-        std::cout << "  " << rt << std::endl;
+        writer.add(rt);
       }
       if (!rt_reader(rt)) {
         break;
       }
     }
+
+    writer.end();
   }
 }
 
@@ -305,10 +316,11 @@ int main(int argc, char *argv[]) {
     std::string dump_file(argv[1]);
     std::map<int64_t, std::string> display_name_map;
     extract_users(dump_file, display_name_map);
-    extract_changesets(dump_file);
-    extract_current_nodes(dump_file);
-    extract_current_ways(dump_file);
-    extract_current_relations(dump_file);
+    xml_writer writer(std::cout, display_name_map);
+    extract_changesets(dump_file, writer);
+    extract_current_nodes(dump_file, writer);
+    //extract_current_ways(dump_file, writer);
+    //extract_current_relations(dump_file, writer);
 
   } catch (const std::exception &e) {
     std::cerr << "EXCEPTION: " << e.what() << "\n";
