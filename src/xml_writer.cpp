@@ -225,10 +225,38 @@ void xml_writer::begin(const current_node &n) {
   }
 }
 
-void xml_writer::begin(const current_way &) {
+void xml_writer::begin(const current_way &w) {
+  m_impl->begin("way");
+  m_impl->attribute("id", w.id);
+  m_impl->attribute("timestamp", w.timestamp);
+  m_impl->attribute("version", w.version);
+  m_impl->attribute("changeset", w.changeset_id);
+
+  changeset_map_t::const_iterator cs_itr = m_changesets.find(w.changeset_id);
+  if (cs_itr != m_changesets.end()) {
+    user_map_t::const_iterator user_itr = m_users.find(cs_itr->second);
+    if (user_itr != m_users.end()) {
+      m_impl->attribute("user", user_itr->second);
+      m_impl->attribute("uid", user_itr->first);
+    }
+  }
 }
 
-void xml_writer::begin(const current_relation &) {
+void xml_writer::begin(const current_relation &r) {
+  m_impl->begin("relation");
+  m_impl->attribute("id", r.id);
+  m_impl->attribute("timestamp", r.timestamp);
+  m_impl->attribute("version", r.version);
+  m_impl->attribute("changeset", r.changeset_id);
+
+  changeset_map_t::const_iterator cs_itr = m_changesets.find(r.changeset_id);
+  if (cs_itr != m_changesets.end()) {
+    user_map_t::const_iterator user_itr = m_users.find(cs_itr->second);
+    if (user_itr != m_users.end()) {
+      m_impl->attribute("user", user_itr->second);
+      m_impl->attribute("uid", user_itr->first);
+    }
+  }
 }
 
 void xml_writer::add(const current_tag &t) {
@@ -238,10 +266,23 @@ void xml_writer::add(const current_tag &t) {
   m_impl->end();
 }
 
-void xml_writer::add(const current_way_node &) {
+void xml_writer::add(const current_way_node &wn) {
+  m_impl->begin("nd");
+  m_impl->attribute("ref", wn.node_id);
+  m_impl->end();
 }
 
-void xml_writer::add(const current_relation_member &) {
+void xml_writer::add(const current_relation_member &rm) {
+  m_impl->begin("member");
+  const char *type = 
+    (rm.member_id == nwr_node) ? "node" :
+    (rm.member_id == nwr_way) ? "way" :
+    "relation";
+
+  m_impl->attribute("type", type);
+  m_impl->attribute("ref", rm.member_id);
+  m_impl->attribute("role", rm.member_role);
+  m_impl->end();
 }
 
 void xml_writer::end() {

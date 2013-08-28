@@ -319,8 +319,8 @@ int main(int argc, char *argv[]) {
     xml_writer writer(std::cout, display_name_map);
     extract_changesets(dump_file, writer);
     extract_current_nodes(dump_file, writer);
-    //extract_current_ways(dump_file, writer);
-    //extract_current_relations(dump_file, writer);
+    extract_current_ways(dump_file, writer);
+    extract_current_relations(dump_file, writer);
 
   } catch (const std::exception &e) {
     std::cerr << "EXCEPTION: " << e.what() << "\n";
