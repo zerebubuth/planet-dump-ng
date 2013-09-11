@@ -11,6 +11,7 @@
 
 #include "extract_kv.hpp"
 #include "types.hpp"
+#include "time_epoch.hpp"
 
 namespace bt = boost::posix_time;
 namespace bf = boost::fusion;
@@ -70,19 +71,34 @@ struct app_item {
   }
   
   int operator()(int, const std::string &s) const {
-    if (s.size() > std::numeric_limits<uint16_t>::max()) {
+    uint32_t size = s.size();
+    if (size > size_t(std::numeric_limits<uint32_t>::max())) {
       throw std::runtime_error("String length too long.");
     }
-    operator()(0, uint16_t(s.size()));
+
+    unsigned char c = 0;
+    while (size > 0x80) {
+      c = 0x80 | (size & 0x7f);
+      out.write((const char *)&c, 1);
+      size >>= 7;
+    }
+    c = size & 0x7f;
+    out.write((const char *)&c, 1);
+
     out.write(s.data(), s.size());
     return 0;
   }
   
   int operator()(int, const bt::ptime &t) const {
-    boost::gregorian::date::date_int_type days = t.date().day_number();
-    bt::ptime::time_duration_type::tick_type ticks = t.time_of_day().ticks();
-    operator()(0, days);
-    operator()(0, ticks);
+    if (t < time_epoch) {
+      throw std::runtime_error("Time is before epoch.");
+    }
+    bt::time_duration dt = t - time_epoch;
+    long seconds = dt.total_seconds();
+    if (seconds > long(std::numeric_limits<uint32_t>::max())) {
+      throw std::runtime_error("Time is too late after epoch.");
+    }
+    operator()(0, uint32_t(seconds));
     return 0;
   }
   
@@ -98,15 +114,21 @@ struct app_item {
   }
 
   int operator()(int, user_status_enum e) const {
-    return operator()(0, int(e));
+    char c = char(e);
+    out.put(c);
+    return 0;
   }
 
   int operator()(int, format_enum e) const {
-    return operator()(0, int(e));
+    char c = char(e);
+    out.put(c);
+    return 0;
   }
 
   int operator()(int, nwr_enum e) const {
-    return operator()(0, nwr_enum(e));
+    char c = char(e);
+    out.put(c);
+    return 0;
   }
 
   std::ostream &out;

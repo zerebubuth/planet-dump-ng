@@ -11,6 +11,7 @@
 
 #include "insert_kv.hpp"
 #include "types.hpp"
+#include "time_epoch.hpp"
 
 namespace bt = boost::posix_time;
 namespace bf = boost::fusion;
@@ -77,19 +78,22 @@ struct unapp_item {
   }
 
   int operator()(int, std::string &s) const {
-    uint16_t size;
-    operator()(0, size);
+    uint32_t size = 0;
+    unsigned char c = 0;
+    do {
+      in.read((char *)&c, 1);
+      size = (size << 7) | uint32_t(c & 0x7f);
+    } while ((c & 0x80) == 0x80);
+
     s.resize(size);
     in.read(&s[0], size);
     return 0;
   }
 
   int operator()(int, bt::ptime &t) const {
-    boost::gregorian::date::date_int_type days;
-    bt::ptime::time_duration_type::tick_type ticks;
-    operator()(0, days);
-    operator()(0, ticks);
-    t = bt::ptime(boost::gregorian::date(days), bt::ptime::time_duration_type(0, 0, 0, ticks));
+    uint32_t dt;
+    operator()(0, dt);
+    t = time_epoch + bt::seconds(dt);
     return 0;
   }
 
@@ -108,23 +112,23 @@ struct unapp_item {
   }
 
   int operator()(int, user_status_enum &e) const {
-    int i;
-    operator()(0, i);
-    e = user_status_enum(e);
+    char c;
+    in.read(&c, 1);
+    e = user_status_enum(c);
     return 0;
   }
 
   int operator()(int, format_enum &e) const {
-    int i;
-    operator()(0, i);
-    e = format_enum(e);
+    char c;
+    in.read(&c, 1);
+    e = format_enum(c);
     return 0;
   }
 
   int operator()(int, nwr_enum &e) const {
-    int i;
-    operator()(0, i);
-    e = nwr_enum(e);
+    char c;
+    in.read(&c, 1);
+    e = nwr_enum(c);
     return 0;
   }    
 

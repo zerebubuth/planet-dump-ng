@@ -40,7 +40,11 @@ private:
       throw std::runtime_error((boost::format("Wrong number of columns: expecting %1%, got %2% in line `%3%'.") 
                                 % sz % columns.size() % line).str());
     }
-    set_values(row, columns);
+    try {
+      set_values(row, columns);
+    } catch (const std::exception &e) {
+      throw std::runtime_error((boost::format("%1%: in line `%2%'.") % e.what() % line).str());
+    }
   }
 
   inline void set_values(T &t, std::vector<std::string> &vs) {

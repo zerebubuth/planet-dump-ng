@@ -45,10 +45,10 @@ struct user {
   user_status_enum status;
   boost::optional<boost::posix_time::ptime> terms_agreed;
   bool consider_pd;
-  boost::optional<std::string> openid_url, preferred_editor;
+  boost::optional<std::string> preferred_editor;
   bool terms_seen;
+  boost::optional<std::string> openid_url, image_fingerprint;
   format_enum description_format;
-  boost::optional<std::string> image_fingerprint;
   int32_t changesets_count, traces_count, diary_entries_count;
   bool image_use_gravatar;
 };
@@ -75,11 +75,11 @@ BOOST_FUSION_ADAPT_STRUCT(
   (user_status_enum, status)
   (boost::optional<boost::posix_time::ptime>, terms_agreed)
   (bool, consider_pd)
-  (boost::optional<std::string>, openid_url)
   (boost::optional<std::string>, preferred_editor)
   (bool, terms_seen)
-  (format_enum, description_format)
+  (boost::optional<std::string>, openid_url)
   (boost::optional<std::string>, image_fingerprint)
+  (format_enum, description_format)
   (int32_t, changesets_count)
   (int32_t, traces_count)
   (int32_t, diary_entries_count)

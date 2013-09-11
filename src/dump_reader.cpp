@@ -9,6 +9,9 @@
 
 #include <leveldb/db.h>
 #include <leveldb/options.h>
+#include <leveldb/write_batch.h>
+
+#define BATCH_SIZE (10240)
 
 namespace {
 
@@ -148,6 +151,8 @@ struct dump_reader::pimpl {
       m_line_filter(m_proc, 1024 * 1024),
       m_cont_filter(m_line_filter),
       m_db(NULL),
+      m_batch(),
+      m_batch_size(0),
       m_write_options() {
 
     leveldb::Options options;
@@ -165,7 +170,14 @@ struct dump_reader::pimpl {
   }
 
   void put(const std::string &k, const std::string &v) {
-    m_db->Put(m_write_options, k, v);
+    m_batch.Put(k, v);
+    ++m_batch_size;
+
+    if (m_batch_size >= BATCH_SIZE) {
+      m_db->Write(m_write_options, &m_batch);
+      m_batch.Clear();
+      m_batch_size = 0;
+    }
   }
   
   process m_proc;
@@ -173,6 +185,8 @@ struct dump_reader::pimpl {
   filter_copy_contents<to_line_filter<process> > m_cont_filter;
   
   leveldb::DB *m_db;
+  leveldb::WriteBatch m_batch;
+  size_t m_batch_size;
   leveldb::WriteOptions m_write_options;
 };
 
