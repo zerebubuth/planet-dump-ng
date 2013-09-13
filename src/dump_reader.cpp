@@ -158,6 +158,10 @@ struct dump_reader::pimpl {
     leveldb::Options options;
     options.create_if_missing = true;
     options.error_if_exists = true;
+
+    // bigger write buffer, as this is a write-heavy process...
+    options.write_buffer_size = 128 * 1024 * 1024;
+
     leveldb::Status status = leveldb::DB::Open(options, table_name, &m_db);
     if (!status.ok()) {
       throw std::runtime_error((boost::format("Can't open database: %1%") % status.ToString()).str());

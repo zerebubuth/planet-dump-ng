@@ -33,10 +33,24 @@ struct unescape_copy_row
 
 private:
   void unpack(std::string &line, T &row) {
-    std::vector<std::string> columns;
-    boost::split(columns, line, boost::is_any_of("\t"));
-    if (columns.size() != s_num_columns) {
-      size_t sz = s_num_columns;
+    const size_t sz = s_num_columns;
+    std::vector<std::pair<char *, size_t> > columns;
+    columns.reserve(sz);
+    {
+      char *prev_ptr = &line[0];
+      char * const end_ptr = &line[line.size()];
+      char *ptr = &line[0];
+      for (; ptr != end_ptr; ++ptr) {
+        if (*ptr == '\t') {
+          *ptr = '\0';
+          columns.push_back(std::make_pair(prev_ptr, std::distance(prev_ptr, ptr)));
+          prev_ptr = ptr + 1;
+        }
+      }
+      columns.push_back(std::make_pair(prev_ptr, std::distance(prev_ptr, ptr)));
+    }
+
+    if (columns.size() != sz) {
       throw std::runtime_error((boost::format("Wrong number of columns: expecting %1%, got %2% in line `%3%'.") 
                                 % sz % columns.size() % line).str());
     }
@@ -47,16 +61,16 @@ private:
     }
   }
 
-  inline void set_values(T &t, std::vector<std::string> &vs) {
+  inline void set_values(T &t, std::vector<std::pair<char *, size_t> > &vs) {
     boost::fusion::for_each(t, set_value(vs.begin()));
   }
 
   struct set_value {
-    explicit set_value(std::vector<std::string>::iterator i) : itr(i) {}
+    explicit set_value(std::vector<std::pair<char *, size_t> >::iterator i) : itr(i) {}
 
     void operator()(bool &b) const {
-      std::string &str = *itr++;
-      switch (str[0]) {
+      std::pair<char *, size_t> str = *itr++;
+      switch (str.first[0]) {
       case 't':
         b = true;
         break;
@@ -64,49 +78,66 @@ private:
         b = false;
         break;
       default:
-        throw std::runtime_error((boost::format("Unrecognised value for bool: `%1%'") % str).str());
+        throw std::runtime_error((boost::format("Unrecognised value for bool: `%1%'") % str.first).str());
       }
     }
 
     void operator()(int16_t &i) const {
-      std::string &str = *itr++;
+      std::pair<char *, size_t> str = *itr++;
       unescape(str);
-      i = boost::lexical_cast<int16_t>(str);
+      i = int16_t(strtol(str.first, NULL, 10));
     }
     
     void operator()(int32_t &i) const {
-      std::string &str = *itr++;
+      std::pair<char *, size_t> str = *itr++;
       unescape(str);
-      i = boost::lexical_cast<int32_t>(str);
+      i = int32_t(strtol(str.first, NULL, 10));
     }
     
     void operator()(int64_t &i) const {
-      std::string &str = *itr++;
+      std::pair<char *, size_t> str = *itr++;
       unescape(str);
-      i = boost::lexical_cast<int64_t>(str);
+      i = int64_t(strtoll(str.first, NULL, 10));
     }
 
     void operator()(double &d) const {
-      std::string &str = *itr++;
+      std::pair<char *, size_t> str = *itr++;
       unescape(str);
-      d = boost::lexical_cast<double>(str);
+      d = strtod(str.first, NULL);
     }
 
     void operator()(std::string &v) const {
-      std::string &str = *itr++;
-      std::swap(v, str);
+      std::pair<char *, size_t> str = *itr++;
+      v.assign(str.first, str.second);
     }
 
     void operator()(boost::posix_time::ptime &t) const {
-      std::string &str = *itr++;
+      std::pair<char *, size_t> str = *itr++;
       unescape(str);
-      t = boost::posix_time::time_from_string(str);
+      //                    11111111112
+      //           12345678901234567890
+      // format is 2013-09-11 13:39:52.742365
+      if (str.second < 19) { 
+        throw std::runtime_error((boost::format("Unexpected format for timestamp: `%1%'.") 
+                                  % str.first).str());
+      }
+      int year  = ((str.first[0] - '0') * 1000 +
+                   (str.first[1] - '0') * 100 +
+                   (str.first[2] - '0') * 10 +
+                   (str.first[3] - '0'));
+      int month = ((str.first[5] - '0') * 10 + (str.first[6] - '0'));
+      int day   = ((str.first[8] - '0') * 10 + (str.first[9] - '0'));
+      int hour  = ((str.first[11] - '0') * 10 + (str.first[12] - '0'));
+      int min   = ((str.first[14] - '0') * 10 + (str.first[15] - '0'));
+      int sec   = ((str.first[17] - '0') * 10 + (str.first[19] - '0'));
+      t = boost::posix_time::ptime(boost::gregorian::date(year, month, day),
+                                   boost::posix_time::time_duration(hour, min, sec));
     }
 
     template <typename V>
     void operator()(boost::optional<V> &o) const {
-      std::string &s = *itr;
-      if (s == "\\N") {
+      std::pair<char *, size_t> s = *itr;
+      if (strncmp(s.first, "\\N", s.second) == 0) {
         o = boost::none;
         ++itr;
       } else {
@@ -117,55 +148,55 @@ private:
     }
 
     void operator()(user_status_enum &e) const {
-      std::string &str = *itr++;
+      std::pair<char *, size_t> str = *itr++;
       unescape(str);
-      if (str == "pending") {
+      if (strncmp(str.first, "pending", str.second) == 0) {
         e = user_status_pending;
-      } else if (str == "active") {
+      } else if (strncmp(str.first, "active", str.second) == 0) {
         e = user_status_active;
-      } else if (str == "confirmed") {
+      } else if (strncmp(str.first, "confirmed", str.second) == 0) {
         e = user_status_confirmed;
-      } else if (str == "suspended") {
+      } else if (strncmp(str.first, "suspended", str.second) == 0) {
         e = user_status_suspended;
-      } else if (str == "deleted") {
+      } else if (strncmp(str.first, "deleted", str.second) == 0) {
         e = user_status_deleted;
       } else {
-        throw std::runtime_error((boost::format("Unrecognised value for user_status_enum: `%1%'.") % str).str());
+        throw std::runtime_error((boost::format("Unrecognised value for user_status_enum: `%1%'.") % str.first).str());
       }
     }
 
     void operator()(format_enum &e) const {
-      std::string &str = *itr++;
+      std::pair<char *, size_t> str = *itr++;
       unescape(str);
-      if (str == "html") {
+      if (strncmp(str.first, "html", str.second) == 0) {
         e = format_html;
-      } else if (str == "markdown") {
+      } else if (strncmp(str.first, "markdown", str.second) == 0) {
         e = format_markdown;
-      } else if (str == "text") {
+      } else if (strncmp(str.first, "text", str.second) == 0) {
         e = format_text;
       } else {
-        throw std::runtime_error((boost::format("Unrecognised value for format_enum: `%1%'.") % str).str());
+        throw std::runtime_error((boost::format("Unrecognised value for format_enum: `%1%'.") % str.first).str());
       }
     }
 
     void operator()(nwr_enum &e) const {
-      std::string &str = *itr++;
+      std::pair<char *, size_t> str = *itr++;
       unescape(str);
-      if (str == "Node") {
+      if (strncmp(str.first, "Node", str.second) == 0) {
         e = nwr_node;
-      } else if (str == "Way") {
+      } else if (strncmp(str.first, "Way", str.second) == 0) {
         e = nwr_way;
-      } else if (str == "Relation") {
+      } else if (strncmp(str.first, "Relation", str.second) == 0) {
         e = nwr_relation;
       } else {
-        throw std::runtime_error((boost::format("Unrecognised value for nwr_enum: `%1%'.") % str).str());
+        throw std::runtime_error((boost::format("Unrecognised value for nwr_enum: `%1%'.") % str.first).str());
       }
     }
 
-    void unescape(std::string &s) const {
+    void unescape(std::pair<char *, size_t> &s) const {
     }
 
-    mutable std::vector<std::string>::iterator itr;
+    mutable std::vector<std::pair<char *, size_t> >::iterator itr;
   };
 
   S &m_source;
