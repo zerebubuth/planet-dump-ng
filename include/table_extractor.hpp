@@ -19,9 +19,10 @@ struct table_extractor {
     size_t bytes = 0;
     row_type row;
     unescape_copy_row<dump_reader, row_type> filter(m_reader);
+    extract_kv<row_type> extract;
     while ((bytes = filter.read(row)) > 0) {
       std::string key, val;
-      extract_kv<row_type>(row, key, val);
+      extract(row, key, val);
       m_reader.put(key, val);
     }
   }

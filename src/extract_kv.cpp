@@ -135,8 +135,9 @@ struct app_item {
 };
 
 template <typename T>
-std::string to_binary(const T &t) {
-  std::ostringstream out;
+std::string to_binary(std::ostringstream &out, const T &t) {
+  out.clear();
+  out.seekp(0);
   bf::fold(t, 0, app_item(out));
   return out.str();
 }
@@ -144,39 +145,39 @@ std::string to_binary(const T &t) {
 } // anonymous namespace
 
 template <typename T>
-void extract_kv(T &t, std::string &key, std::string &val) {
+void extract_kv<T>::operator()(T &t, std::string &key, std::string &val) {
   static const int num_keys = T::num_keys;
   typedef typename bf::result_of::begin<T>::type it_begin;
   typedef typename bf::result_of::end<T>::type it_end;
   typedef typename bf::result_of::advance_c<it_begin, num_keys>::type it_key;
-
+  
   it_begin v_begin(t, 0);
   it_key v_key(t, 0);
   it_end v_end(t, 0);
-
-  key = to_binary(bf::iterator_range<it_begin, it_key>(v_begin, v_key));
-  val = to_binary(bf::iterator_range<it_key, it_end>(v_key, v_end));
+  
+  key = to_binary(out, bf::iterator_range<it_begin, it_key>(v_begin, v_key));
+  val = to_binary(out, bf::iterator_range<it_key, it_end>(v_key, v_end));
 }
 
 template <>
-void extract_kv<current_way_node>(current_way_node &t, std::string &key, std::string &val) {
+void extract_kv<current_way_node>::operator()(current_way_node &t, std::string &key, std::string &val) {
   boost::tuple<int64_t, int64_t> t_key(t.way_id, t.sequence_id);
   boost::tuple<int64_t> t_val(t.node_id);
-  key = to_binary(t_key);
-  val = to_binary(t_val);
+  key = to_binary(out, t_key);
+  val = to_binary(out, t_val);
 }
 
 template <>
-void extract_kv<current_relation_member>(current_relation_member &t, std::string &key, std::string &val) {
+void extract_kv<current_relation_member>::operator()(current_relation_member &t, std::string &key, std::string &val) {
   boost::tuple<int64_t, int32_t> t_key(t.relation_id, t.sequence_id);
   boost::tuple<nwr_enum, int64_t, std::string> t_val(t.member_type, t.member_id, t.member_role);
-  key = to_binary(t_key);
-  val = to_binary(t_val);
+  key = to_binary(out, t_key);
+  val = to_binary(out, t_val);
 }
 
-template void extract_kv<user>(user &, std::string &, std::string &);
-template void extract_kv<changeset>(changeset &, std::string &, std::string &);
-template void extract_kv<current_tag>(current_tag &, std::string &, std::string &);
-template void extract_kv<current_node>(current_node &, std::string &, std::string &);
-template void extract_kv<current_way>(current_way &, std::string &, std::string &);
-template void extract_kv<current_relation>(current_relation &, std::string &, std::string &);
+template struct extract_kv<user>;
+template struct extract_kv<changeset>;
+template struct extract_kv<current_tag>;
+template struct extract_kv<current_node>;
+template struct extract_kv<current_way>;
+template struct extract_kv<current_relation>;

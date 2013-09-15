@@ -2,8 +2,13 @@
 #define EXTRACT_KV_HPP
 
 #include <string>
+#include <sstream>
 
 template <typename T>
-void extract_kv(T &t, std::string &key, std::string &val);
+struct extract_kv {
+  void operator()(T &t, std::string &key, std::string &val);
+private:
+  std::ostringstream out;
+};
 
 #endif /* EXTRACT_KV_HPP */
