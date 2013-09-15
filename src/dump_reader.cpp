@@ -169,6 +169,11 @@ struct dump_reader::pimpl {
   }
 
   ~pimpl() {
+    if (m_batch_size > 0) {
+      m_db->Write(m_write_options, &m_batch);
+      m_batch.Clear();
+      m_batch_size = 0;
+    }
     m_db->CompactRange(NULL, NULL);
     delete m_db;
   }
