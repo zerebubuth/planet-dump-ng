@@ -193,7 +193,130 @@ private:
       }
     }
 
+    inline int hex2digit(char ch) const {
+      switch (ch) {
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+        return int(ch - '0');
+
+      case 'a':
+      case 'b':
+      case 'c':
+      case 'd':
+      case 'e':
+      case 'f':
+        return 10 + int(ch - 'a');
+
+      case 'A':
+      case 'B':
+      case 'C':
+      case 'D':
+      case 'E':
+      case 'F':
+        return 10 + int(ch - 'A');
+
+      default:
+        throw std::runtime_error("Invalid hex digit.");
+      }
+    }
+
+    inline int oct2digit(char ch) const {
+      if ((ch >= '0') && (ch <= '7')) {
+        return int(ch - '0');
+      } else {
+        throw std::runtime_error("Invalid octal digit.");
+      }
+    }
+
     void unescape(std::pair<char *, size_t> &s) const {
+      const size_t end = s.second;
+      char *str = s.first;
+      size_t j = 0;
+
+      for (size_t i = 0; i < end; ++i) {
+        switch (str[i]) {
+        case '\\':
+          ++i;
+          if (i < end) {
+            switch (str[i]) {
+            case 'b':
+              str[j] = '\b';
+              break;
+
+            case 'f':
+              str[j] = '\f';
+              break;
+
+            case 'n':
+              str[j] = '\n';
+              break;
+
+            case 'r':
+              str[j] = '\r';
+              break;
+
+            case 't':
+              str[j] = '\t';
+              break;
+
+            case 'v':
+              str[j] = '\v';
+              break;
+
+            case 'x':
+              i += 2;
+              if (i < end) {
+              } else {
+                str[j] = char(hex2digit(str[i-1]) * 16 + hex2digit(str[i]));
+                throw std::runtime_error("Unterminated hex escape sequence.");
+              }
+              break;
+
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+              i += 2;
+              if (i < end) {
+                str[j] = char(oct2digit(str[i-2]) * 64 + oct2digit(str[i-1]) * 8 + oct2digit(str[i]));
+              } else {
+                throw std::runtime_error("Unterminated octal escape sequence.");
+              }
+              break;
+
+            default:
+              // an unnecessary escape
+              str[j] = str[i];
+            }
+            
+          } else {
+            throw std::runtime_error("Unterminated escape sequence.");
+          }
+          break;
+          
+        default:
+          if (i != j) {
+            str[j] = str[i];
+          }
+        }
+
+        ++j;
+      }
+
+      str[j] = '\0';
+      s.second = j;
     }
 
     mutable std::vector<std::pair<char *, size_t> >::iterator itr;
