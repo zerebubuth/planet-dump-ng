@@ -11,7 +11,6 @@
 #include <leveldb/options.h>
 #include <leveldb/write_batch.h>
 
-#define BOOST_SPIRIT_DEBUG
 #include <boost/spirit/include/qi.hpp>
 #include <boost/foreach.hpp>
 
@@ -123,9 +122,6 @@ struct copy_line
 
     root = lit("COPY") >> lit(table_name) >> lit("(") >> (ident % lit(',')) >> lit(") FROM stdin;");
     ident = (alpha >> *(alnum | char_('_'))) | (lit("\"") >> *(char_ - '"' - '\\') >> lit("\""));
-
-    qi::debug(root);
-    qi::debug(ident);
   }
 
   qi::rule<Iterator, std::vector<std::string>(), qi::space_type> root;
