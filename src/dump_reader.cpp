@@ -147,6 +147,33 @@ struct filter_copy_contents
   ~filter_copy_contents() {
   }
 
+  std::vector<std::string> init() {
+    std::vector<std::string> column_names;
+    std::string line;
+    size_t got_data = 0;
+
+    do {
+      got_data = m_source.read(line);
+
+      if (got_data == 0) {
+        throw std::runtime_error("Input ended before COPY header was seen.");
+      }
+
+      if (line.compare(0, m_start_prefix.size(), m_start_prefix) == 0) {
+        std::string::iterator begin = line.begin();
+        std::string::iterator end = line.end();
+        bool result = qi::phrase_parse(begin, end, m_grammar, qi::space, column_names);
+        if (!result) {
+          throw std::runtime_error("Could not parse COPY line header.");
+        }
+        m_in_copy = true;
+        break;
+      }
+    } while (true);
+
+    return column_names;
+  }
+
   size_t read(std::string &line) {
     size_t got_data = 0;
     do {
@@ -154,18 +181,6 @@ struct filter_copy_contents
 
       if (got_data == 0) {
         break;
-      }
-
-      if (!m_in_copy && (line.compare(0, m_start_prefix.size(), m_start_prefix) == 0)) {
-        std::string::iterator begin = line.begin();
-        std::string::iterator end = line.end();
-        std::vector<std::string> column_names;
-        bool result = qi::phrase_parse(begin, end, m_grammar, qi::space, column_names);
-        if (!result) {
-          throw std::runtime_error("Could not parse COPY line header.");
-        }
-        m_in_copy = true;
-        got_data = m_source.read(line);
       }
 
       if (m_in_copy && (line.compare(m_end_line) == 0)) {
@@ -207,6 +222,9 @@ struct dump_reader::pimpl {
     if (!status.ok()) {
       throw std::runtime_error((boost::format("Can't open database: %1%") % status.ToString()).str());
     }
+
+    // get the headers for the COPY data
+    m_column_names = m_cont_filter.init();
   }
 
   ~pimpl() {
@@ -238,6 +256,8 @@ struct dump_reader::pimpl {
   leveldb::WriteBatch m_batch;
   size_t m_batch_size;
   leveldb::WriteOptions m_write_options;
+
+  std::vector<std::string> m_column_names;
 };
 
 dump_reader::dump_reader(const std::string &table_name,
@@ -250,6 +270,10 @@ dump_reader::dump_reader(const std::string &table_name,
 
 dump_reader::~dump_reader() {
 }  
+
+const std::vector<std::string> &dump_reader::column_names() const {
+  return m_impl->m_column_names;
+}
 
 size_t dump_reader::read(std::string &line) {
   return m_impl->m_cont_filter.read(line);

@@ -4,6 +4,7 @@
 #include <boost/noncopyable.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <string>
+#include <vector>
 
 struct dump_reader 
   : public boost::noncopyable {
@@ -12,6 +13,7 @@ struct dump_reader
 
   ~dump_reader();
 
+  const std::vector<std::string> &column_names() const;
   size_t read(std::string &);
   void put(const std::string &, const std::string &);
 
