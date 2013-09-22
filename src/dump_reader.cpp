@@ -11,9 +11,15 @@
 #include <leveldb/options.h>
 #include <leveldb/write_batch.h>
 
+#define BOOST_SPIRIT_DEBUG
+#include <boost/spirit/include/qi.hpp>
+#include <boost/foreach.hpp>
+
 #define BATCH_SIZE (10240)
 
 namespace {
+
+namespace qi = boost::spirit::qi;
 
 struct process 
   : public boost::noncopyable {
@@ -102,14 +108,40 @@ private:
   std::string::iterator m_buffer_pos, m_buffer_end;
 };
 
+// COPY current_nodes (id, latitude, longitude, changeset_id, visible, "timestamp", tile, version) FROM stdin;
+template <typename Iterator>
+struct copy_line
+  : qi::grammar<Iterator, std::vector<std::string>(), qi::space_type> {
+
+  copy_line(const std::string &table_name)
+    : copy_line::base_type(root) {
+    using qi::char_;
+    using qi::alpha;
+    using qi::alnum;
+    using qi::lexeme;
+    using qi::lit;
+
+    root = lit("COPY") >> lit(table_name) >> lit("(") >> (ident % lit(',')) >> lit(") FROM stdin;");
+    ident = (alpha >> *(alnum | char_('_'))) | (lit("\"") >> *(char_ - '"' - '\\') >> lit("\""));
+
+    qi::debug(root);
+    qi::debug(ident);
+  }
+
+  qi::rule<Iterator, std::vector<std::string>(), qi::space_type> root;
+  qi::rule<Iterator, std::string(), qi::space_type> ident;
+};
+
 template <typename T>
 struct filter_copy_contents 
   : public boost::noncopyable {
-  explicit filter_copy_contents(T &source) 
+  explicit filter_copy_contents(T &source, const std::string &table_name) 
   : m_source(source),
     m_in_copy(false),
     m_start_prefix("COPY "),
-    m_end_line("\\.") {
+    m_end_line("\\."),
+    m_grammar(table_name),
+    m_table_name(table_name) {
   }
 
   ~filter_copy_contents() {
@@ -125,6 +157,13 @@ struct filter_copy_contents
       }
 
       if (!m_in_copy && (line.compare(0, m_start_prefix.size(), m_start_prefix) == 0)) {
+        std::string::iterator begin = line.begin();
+        std::string::iterator end = line.end();
+        std::vector<std::string> column_names;
+        bool result = qi::phrase_parse(begin, end, m_grammar, qi::space, column_names);
+        if (!result) {
+          throw std::runtime_error("Could not parse COPY line header.");
+        }
         m_in_copy = true;
         got_data = m_source.read(line);
       }
@@ -141,6 +180,8 @@ private:
   T &m_source;
   bool m_in_copy;
   const std::string m_start_prefix, m_end_line;
+  copy_line<std::string::iterator> m_grammar;
+  std::string m_table_name;
 };
 
 } // anonymous namespace
@@ -149,7 +190,7 @@ struct dump_reader::pimpl {
   pimpl(const std::string &cmd, const std::string &table_name)
     : m_proc(cmd),
       m_line_filter(m_proc, 1024 * 1024),
-      m_cont_filter(m_line_filter),
+      m_cont_filter(m_line_filter, table_name),
       m_db(NULL),
       m_batch(),
       m_batch_size(0),
