@@ -28,6 +28,7 @@ enum nwr_enum {
 
 struct user {
   static const int num_keys = 1;
+  static const std::vector<std::string> &column_names();
 
   std::string email;
   int64_t id;
@@ -88,6 +89,7 @@ BOOST_FUSION_ADAPT_STRUCT(
   
 struct changeset {
   static const int num_keys = 1;
+  static const std::vector<std::string> &column_names();
 
   int64_t id;
   int32_t uid;
@@ -112,6 +114,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 
 struct current_tag {
   static const int num_keys = 2;
+  static const std::vector<std::string> &column_names();
 
   int64_t element_id;
   std::string key, value;
@@ -126,6 +129,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 
 struct current_node {
   static const int num_keys = 1;
+  static const std::vector<std::string> &column_names();
 
   int64_t id;
   int32_t latitude, longitude;
@@ -149,6 +153,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 
 struct current_way {
   static const int num_keys = 1;
+  static const std::vector<std::string> &column_names();
 
   int64_t id, changeset_id;
   boost::posix_time::ptime timestamp;
@@ -166,6 +171,8 @@ BOOST_FUSION_ADAPT_STRUCT(
   )
 
 struct current_way_node { 
+  static const std::vector<std::string> &column_names();
+
   int64_t way_id, node_id, sequence_id;
 };
 
@@ -178,6 +185,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 
 struct current_relation {
   static const int num_keys = 1;
+  static const std::vector<std::string> &column_names();
 
   int64_t id, changeset_id;
   boost::posix_time::ptime timestamp;
@@ -195,6 +203,8 @@ BOOST_FUSION_ADAPT_STRUCT(
   )
 
 struct current_relation_member {
+  static const std::vector<std::string> &column_names();
+
   int64_t relation_id;
   nwr_enum member_type;
   int64_t member_id;

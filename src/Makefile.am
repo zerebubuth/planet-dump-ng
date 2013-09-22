@@ -10,5 +10,6 @@ ___planet_dump_ng_SOURCES=\
 	insert_kv.cpp \
 	planet-dump.cpp \
 	xml_writer.cpp \
-	time_epoch.cpp
+	time_epoch.cpp \
+	types.cpp
 

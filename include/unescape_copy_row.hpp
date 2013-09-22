@@ -16,7 +16,8 @@ struct unescape_copy_row
   static const size_t s_num_columns = boost::fusion::result_of::size<T>::value;
 
   explicit unescape_copy_row(S &source) 
-  : m_source(source) {
+  : m_source(source),
+    m_reorder(calculate_reorder(m_source.column_names())) {
   }
 
   ~unescape_copy_row() {
@@ -322,7 +323,37 @@ private:
     mutable std::vector<std::pair<char *, size_t> >::iterator itr;
   };
 
+  static std::vector<size_t> calculate_reorder(const std::vector<std::string> &names) {
+    std::vector<size_t> indexes;
+    const std::vector<std::string> &wanted_names = T::column_names();
+
+    const size_t num_columns = wanted_names.size();
+    indexes.reserve(num_columns);
+    for (size_t i = 0; i < num_columns; ++i) {
+      const std::string &wanted_name = wanted_names[i];
+      size_t j = i;
+
+      if (wanted_name != "*") {
+        std::vector<std::string>::const_iterator itr = std::find(names.begin(), names.end(), wanted_name);
+        if (itr == names.end()) {
+          std::ostringstream ostr;
+          ostr << "Unable to find wanted column name \"" << wanted_name << "\" in available names: ";
+          for (std::vector<std::string>::const_iterator jtr = names.begin(); itr != names.end(); ++itr) {
+            ostr << "\"" << *jtr << "\", ";
+          }
+          throw std::runtime_error(ostr.str());
+        }
+        j = std::distance(names.begin(), itr);
+      }
+
+      indexes.push_back(j);
+    }
+
+    return indexes;
+  }
+
   S &m_source;
+  std::vector<size_t> m_reorder;
 };
 
 #endif /* UNESCAPE_COPY_ROW_HPP */
