@@ -35,8 +35,7 @@ struct unescape_copy_row
 private:
   void unpack(std::string &line, T &row) {
     const size_t sz = s_num_columns;
-    std::vector<std::pair<char *, size_t> > columns;
-    columns.reserve(sz);
+    std::vector<std::pair<char *, size_t> > columns, old_columns;
     {
       char *prev_ptr = &line[0];
       char * const end_ptr = &line[line.size()];
@@ -44,11 +43,23 @@ private:
       for (; ptr != end_ptr; ++ptr) {
         if (*ptr == '\t') {
           *ptr = '\0';
-          columns.push_back(std::make_pair(prev_ptr, std::distance(prev_ptr, ptr)));
+          old_columns.push_back(std::make_pair(prev_ptr, std::distance(prev_ptr, ptr)));
           prev_ptr = ptr + 1;
         }
       }
-      columns.push_back(std::make_pair(prev_ptr, std::distance(prev_ptr, ptr)));
+      old_columns.push_back(std::make_pair(prev_ptr, std::distance(prev_ptr, ptr)));
+    }
+
+    columns.reserve(sz);
+    for (size_t i = 0; i < sz; ++i) {
+      if (i >= m_reorder.size()) {
+        throw std::runtime_error("Index exceeds m_reorder.size(), this is a bug.");
+      }
+      size_t j = m_reorder[i];
+      if (j >= old_columns.size()) {
+        throw std::runtime_error("Reordered index exceeds old_columns.size(), this is a bug.");
+      }
+      columns.push_back(old_columns[j]);
     }
 
     if (columns.size() != sz) {
