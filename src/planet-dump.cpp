@@ -41,7 +41,7 @@ std::ostream &operator<<(std::ostream &out, const changeset &cs) {
   out << "changeset(" << cs.id << ", " << cs.uid << ", " << cs.created_at
       << ", " << pr_optional(cs.min_lon) << ", " << pr_optional(cs.min_lat)
       << ", " << pr_optional(cs.max_lon) << ", " << pr_optional(cs.max_lat)
-      << ", " << cs.closed_at << ", " << cs.num_changes
+      << ", " << cs.closed_at
       << ")";
   return out;
 }
@@ -61,7 +61,6 @@ std::ostream &operator<<(std::ostream &out, const current_node &n) {
       << ", " << n.changeset_id
       << ", " << n.visible
       << ", " << n.timestamp
-      << ", " << n.tile
       << ", " << n.version
       << ")";
   return out;

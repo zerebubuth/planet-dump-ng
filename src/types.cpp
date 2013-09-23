@@ -2,16 +2,10 @@
 
 namespace {
 
-const char *user_column_names_[] = { "email", "id", "pass_crypt", "creation_time", "display_name", "data_public", "description",
-                                     "home_lat", "home_lon", "home_zoom", "nearby", "pass_salt", "image_file_name", "email_valid",
-                                     "new_email", "creation_ip", "languages", "status", "terms_agreed", "consider_pd", "openid_url",
-                                     "preferred_editor", "terms_seen", "description_format", "image_fingerprint",
-                                     "changesets_count", "traces_count", "diary_entries_count", "image_use_gravatar" };
-const char *changeset_column_names_[] = { "id", "user_id", "created_at", "min_lat", "max_lat", "min_lon", "max_lon", "closed_at",
-                                          "num_changes" };
+const char *user_column_names_[] = { "id", "display_name", "data_public" };
+const char *changeset_column_names_[] = { "id", "user_id", "created_at", "min_lat", "max_lat", "min_lon", "max_lon", "closed_at" };
 const char *current_tag_column_names_[] = { "*", "k", "v" };
-const char *current_node_column_names_[] = { "id", "latitude", "longitude", "changeset_id", "visible", "timestamp", "tile",
-                                             "version" };
+const char *current_node_column_names_[] = { "id", "latitude", "longitude", "changeset_id", "visible", "timestamp", "version" };
 const char *current_way_column_names_[] = { "id", "changeset_id", "timestamp", "visible", "version" };
 const char *current_way_node_column_names_[] = { "way_id", "node_id", "sequence_id" };
 const char *current_relation_column_names_[] = { "id", "changeset_id", "timestamp", "visible", "version" };

@@ -30,61 +30,16 @@ struct user {
   static const int num_keys = 1;
   static const std::vector<std::string> &column_names();
 
-  std::string email;
   int64_t id;
-  std::string pass_crypt;
-  boost::posix_time::ptime creation_time;
   std::string display_name;
   bool data_public;
-  std::string description;
-  boost::optional<double> home_lat, home_lon;
-  boost::optional<int16_t> home_zoom;
-  boost::optional<int32_t> nearby;
-  boost::optional<std::string> pass_salt, image_file_name;
-  bool email_valid;
-  boost::optional<std::string> new_email, creation_ip, languages;
-  user_status_enum status;
-  boost::optional<boost::posix_time::ptime> terms_agreed;
-  bool consider_pd;
-  boost::optional<std::string> openid_url, preferred_editor;
-  bool terms_seen;
-  format_enum description_format;
-  boost::optional<std::string> image_fingerprint;
-  int32_t changesets_count, traces_count, diary_entries_count;
-  bool image_use_gravatar;
 };
 
 BOOST_FUSION_ADAPT_STRUCT(
   user,
-  (std::string, email)
   (int64_t, id)
-  (std::string, pass_crypt)
-  (boost::posix_time::ptime, creation_time)
   (std::string, display_name)
   (bool, data_public)
-  (std::string, description)
-  (boost::optional<double>, home_lat)
-  (boost::optional<double>, home_lon)
-  (boost::optional<int16_t>, home_zoom)
-  (boost::optional<int32_t>, nearby)
-  (boost::optional<std::string>, pass_salt)
-  (boost::optional<std::string>, image_file_name)
-  (bool, email_valid)
-  (boost::optional<std::string>, new_email)
-  (boost::optional<std::string>, creation_ip)
-  (boost::optional<std::string>, languages)
-  (user_status_enum, status)
-  (boost::optional<boost::posix_time::ptime>, terms_agreed)
-  (bool, consider_pd)
-  (boost::optional<std::string>, openid_url)
-  (boost::optional<std::string>, preferred_editor)
-  (bool, terms_seen)
-  (format_enum, description_format)
-  (boost::optional<std::string>, image_fingerprint)
-  (int32_t, changesets_count)
-  (int32_t, traces_count)
-  (int32_t, diary_entries_count)
-  (bool, image_use_gravatar)
   )
   
 struct changeset {
@@ -96,7 +51,6 @@ struct changeset {
   boost::posix_time::ptime created_at;
   boost::optional<int32_t> min_lat, max_lat, min_lon, max_lon;
   boost::posix_time::ptime closed_at;
-  int32_t num_changes;
 };
 
 BOOST_FUSION_ADAPT_STRUCT(
@@ -109,7 +63,6 @@ BOOST_FUSION_ADAPT_STRUCT(
   (boost::optional<int32_t>, min_lon)
   (boost::optional<int32_t>, max_lon)
   (boost::posix_time::ptime, closed_at)
-  (int32_t, num_changes)
   )
 
 struct current_tag {
@@ -136,7 +89,7 @@ struct current_node {
   int64_t changeset_id;
   bool visible;
   boost::posix_time::ptime timestamp;
-  int64_t tile, version;
+  int64_t version;
 };
 
 BOOST_FUSION_ADAPT_STRUCT(
@@ -147,7 +100,6 @@ BOOST_FUSION_ADAPT_STRUCT(
   (int64_t, changeset_id)
   (bool, visible)
   (boost::posix_time::ptime, timestamp)
-  (int64_t, tile)
   (int64_t, version)
   )
 
