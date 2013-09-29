@@ -23,6 +23,7 @@ AX_BOOST_SYSTEM
 AX_BOOST_FILESYSTEM
 AX_BOOST_PROGRAM_OPTIONS
 AX_BOOST_DATE_TIME
+AX_BOOST_THREAD
 
 AC_ARG_WITH(leveldb,
 	[AS_HELP_STRING([--with-leveldb=<path>], [Path containing LEVELDB library (e.g: /usr).])],
