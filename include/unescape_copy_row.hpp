@@ -349,7 +349,7 @@ private:
         if (itr == names.end()) {
           std::ostringstream ostr;
           ostr << "Unable to find wanted column name \"" << wanted_name << "\" in available names: ";
-          for (std::vector<std::string>::const_iterator jtr = names.begin(); itr != names.end(); ++itr) {
+          for (std::vector<std::string>::const_iterator jtr = names.begin(); jtr != names.end(); ++jtr) {
             ostr << "\"" << *jtr << "\", ";
           }
           throw std::runtime_error(ostr.str());
