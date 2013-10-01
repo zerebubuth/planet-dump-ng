@@ -13,6 +13,10 @@
 
 #include <boost/spirit/include/qi.hpp>
 #include <boost/foreach.hpp>
+#include <boost/exception/all.hpp>
+#include <boost/throw_exception.hpp>
+#include <boost/exception/error_info.hpp>
+#include <boost/weak_ptr.hpp>
 
 #define BATCH_SIZE (10240)
 
@@ -20,32 +24,52 @@ namespace {
 
 namespace qi = boost::spirit::qi;
 
-struct process 
-  : public boost::noncopyable {
-  explicit process(const std::string &cmd) 
-    : m_fh(popen(cmd.c_str(), "r")) {
-    if (m_fh == NULL) {
-      throw std::runtime_error((boost::format("Unable to popen `%1%'.") % cmd).str());
-    }
-  }
+struct tag_copy_header;
+struct tag_leveldb_status;
 
-  ~process() {
-    if (pclose(m_fh) == -1) {
+typedef boost::error_info<tag_copy_header, std::string>    copy_header;
+typedef boost::error_info<tag_leveldb_status, std::string> leveldb_status;
+
+struct popen_error : public boost::exception, std::exception {};
+struct fread_error : public boost::exception, std::exception {};
+struct early_termination_error : public boost::exception, std::exception {};
+struct copy_header_parse_error : public boost::exception, std::exception {};
+struct leveldb_error : public boost::exception, std::exception {};
+
+typedef boost::shared_ptr<FILE> pipe_ptr;
+
+static void pipe_closer(FILE *fh) {
+  if (fh != NULL) {
+    if (pclose(fh) == -1) {
       std::cerr << "ERROR while closing popen." << std::endl;
       abort();
     }
   }
+}
+
+struct process 
+  : public boost::noncopyable {
+  explicit process(const std::string &cmd) 
+    : m_fh(popen(cmd.c_str(), "r"), &pipe_closer) {
+    if (!m_fh) {
+      BOOST_THROW_EXCEPTION(popen_error() << boost::errinfo_file_name(cmd));
+    }
+  }
+
+  ~process() {
+  }
 
   size_t read(char *buf, size_t len) {
-    size_t n = fread(buf, 1, len, m_fh);
-    if (ferror(m_fh) != 0) {
-      throw std::runtime_error("Error reading from popen stream.");
+    size_t n = fread(buf, 1, len, m_fh.get());
+    if (ferror(m_fh.get()) != 0) {
+      boost::weak_ptr<FILE> fh(m_fh);
+      BOOST_THROW_EXCEPTION(fread_error() << boost::errinfo_file_handle(fh));
     }
     return n;
   }
     
 private:
-  FILE *m_fh;
+  pipe_ptr m_fh;
 };
 
 template <typename T>
@@ -150,9 +174,9 @@ struct filter_copy_contents
 
     do {
       got_data = m_source.read(line);
-
+      
       if (got_data == 0) {
-        throw std::runtime_error("Input ended before COPY header was seen.");
+        BOOST_THROW_EXCEPTION(early_termination_error());
       }
 
       if (line.compare(0, m_start_prefix.size(), m_start_prefix) == 0) {
@@ -160,12 +184,19 @@ struct filter_copy_contents
         std::string::iterator end = line.end();
         bool result = qi::phrase_parse(begin, end, m_grammar, qi::space, column_names);
         if (!result) {
-          throw std::runtime_error("Could not parse COPY line header.");
+          BOOST_THROW_EXCEPTION(copy_header_parse_error() << copy_header(line));
         }
         m_in_copy = true;
         break;
       }
     } while (true);
+
+    if (!m_in_copy) {
+      BOOST_THROW_EXCEPTION(early_termination_error());
+    }
+    if (column_names.empty()) {
+      BOOST_THROW_EXCEPTION(early_termination_error());
+    }
 
     return column_names;
   }
@@ -216,7 +247,7 @@ struct dump_reader::pimpl {
 
     leveldb::Status status = leveldb::DB::Open(options, table_name, &m_db);
     if (!status.ok()) {
-      throw std::runtime_error((boost::format("Can't open database: %1%") % status.ToString()).str());
+      BOOST_THROW_EXCEPTION(leveldb_error() << leveldb_status(status.ToString()));
     }
 
     // get the headers for the COPY data
