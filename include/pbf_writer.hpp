@@ -1,5 +1,5 @@
-#ifndef XML_WRITER_HPP
-#define XML_WRITER_HPP
+#ifndef PBF_WRITER_HPP
+#define PBF_WRITER_HPP
 
 #include "types.hpp"
 #include <ostream>
@@ -8,13 +8,13 @@
 #include <map>
 #include <string>
 
-class xml_writer {
+class pbf_writer {
 public:
   typedef std::map<int64_t, std::string> user_map_t;
   typedef std::map<int64_t, int64_t> changeset_map_t;
 
-  xml_writer(std::ostream &, const user_map_t &, const boost::posix_time::ptime &);
-  ~xml_writer();
+  pbf_writer(std::ostream &, const user_map_t &, const boost::posix_time::ptime &);
+  ~pbf_writer();
 
   void begin(const changeset &);
   void begin(const current_node &);
@@ -35,4 +35,4 @@ private:
   changeset_map_t m_changesets;
 };
 
-#endif /* XML_WRITER_HPP */
+#endif /* PBF_WRITER_HPP */

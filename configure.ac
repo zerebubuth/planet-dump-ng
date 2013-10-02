@@ -39,6 +39,16 @@ LEVELDB_CFLAGS="-I${LEVELDB_PREFIX}/include"
 AC_SUBST(LEVELDB_LIBS)
 AC_SUBST(LEVELDB_CFLAGS)
 
+PKG_CHECK_MODULES([PROTOBUF_LITE], "protobuf-lite")
+AC_SUBST([PROTOBUF_LITE_CFLAGS])
+AC_SUBST([PROTOBUF_LITE_LIBS])
+
+PKG_CHECK_MODULES([PROTOBUF], "protobuf")
+AC_SUBST([PROTOBUF_CFLAGS])
+AC_SUBST([PROTOBUF_LIBS])
+
+AC_CHECK_HEADER([osmpbf/osmpbf.h],[],[AC_MSG_ERROR([Unable to find the osmpbf headers, you might need to install libosmpbf-dev.])])
+
 AC_CONFIG_FILES([
 	Makefile
 	src/Makefile])

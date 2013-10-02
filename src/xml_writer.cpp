@@ -1,5 +1,6 @@
 #include "xml_writer.hpp"
 #include "config.h"
+#include "writer_common.hpp"
 
 #include <libxml/encoding.h>
 #include <libxml/xmlwriter.h>
@@ -7,16 +8,11 @@
 #include <stdexcept>
 
 #define SCALE (10000000)
-#define OSM_LICENSE_TEXT     "http://opendatacommons.org/licenses/odbl/1-0/"
-#define OSM_COPYRIGHT_TEXT   "OpenStreetMap and contributors"
-#define OSM_VERSION_TEXT     "0.6"
-#define OSM_ATTRIBUTION_TEXT "http://www.openstreetmap.org/copyright"
-#define OSM_API_ORIGIN       "http://www.openstreetmap.org/api/0.6"
 
 namespace pt = boost::posix_time;
 
 struct xml_writer::pimpl {
-  pimpl(std::ostream &out);
+  pimpl(std::ostream &out, const pt::ptime &now);
   ~pimpl();
 
   void begin(const char *name);
@@ -59,8 +55,8 @@ static int wrap_close(void *context) {
   return 0;
 }
 
-xml_writer::pimpl::pimpl(std::ostream &out) 
-  : m_out(out), m_writer(NULL), m_now(pt::microsec_clock::universal_time()) {
+xml_writer::pimpl::pimpl(std::ostream &out, const pt::ptime &now) 
+  : m_out(out), m_writer(NULL), m_now(now) {
 
   xmlOutputBufferPtr output_buffer =
     xmlOutputBufferCreateIO(wrap_write, wrap_close, this, NULL);
@@ -156,8 +152,9 @@ void xml_writer::pimpl::end() {
   }
 }
 
-xml_writer::xml_writer(std::ostream &out, const user_map_t &users)
-  : m_impl(new pimpl(out)),
+xml_writer::xml_writer(std::ostream &out, const user_map_t &users,
+                       const pt::ptime &max_time)
+  : m_impl(new pimpl(out, max_time)),
     m_users(users) {
   m_impl->begin("osm");
   m_impl->attribute("license",     OSM_LICENSE_TEXT);

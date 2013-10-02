@@ -19,7 +19,7 @@
 #include "table_extractor.hpp"
 #include "types.hpp"
 #include "insert_kv.hpp"
-#include "xml_writer.hpp"
+#include "pbf_writer.hpp"
 
 namespace bt = boost::posix_time;
 namespace fs = boost::filesystem;
@@ -71,7 +71,11 @@ bt::ptime extract_table_with_timestamp(const std::string &table_name,
       std::string timestamp_str;
       fs::ifstream in(base_dir / ".complete");
       std::getline(in, timestamp_str);
-      timestamp = bt::time_from_string(timestamp_str);
+      if (timestamp_str == "-infinity") {
+        timestamp = bt::ptime(bt::neg_infin);
+      } else {
+        timestamp = bt::time_from_string(timestamp_str);
+      }
 
     } else {
       fs::remove_all(base_dir);
@@ -235,7 +239,7 @@ void extract_users(const std::string &dump_file, std::map<int64_t, std::string> 
   }
 }
 
-void extract_changesets(const std::string &dump_file, xml_writer &writer) {
+void extract_changesets(const std::string &dump_file, pbf_writer &writer) {
   extract_table<changeset>("changesets", dump_file);
   extract_table<current_tag>("changeset_tags", dump_file);
 
@@ -246,7 +250,7 @@ void extract_changesets(const std::string &dump_file, xml_writer &writer) {
   cst.element_id = 0;
   while (cs_reader(cs)) {
     writer.begin(cs);
-    
+
     while (cst.element_id <= cs.id) {
       if (cst.element_id == cs.id) {
         writer.add(cst);
@@ -260,7 +264,7 @@ void extract_changesets(const std::string &dump_file, xml_writer &writer) {
   }
 }
 
-void extract_current_nodes(const std::string &dump_file, xml_writer &writer) {
+void extract_current_nodes(const std::string &dump_file, pbf_writer &writer) {
   extract_table<current_tag>("current_node_tags", dump_file);
 
   db_reader<current_node> n_reader("current_nodes");
@@ -284,7 +288,7 @@ void extract_current_nodes(const std::string &dump_file, xml_writer &writer) {
   }
 }
 
-void extract_current_ways(const std::string &dump_file, xml_writer &writer) {
+void extract_current_ways(const std::string &dump_file, pbf_writer &writer) {
   extract_table<current_tag>("current_way_tags", dump_file);
   extract_table<current_way_node>("current_way_nodes", dump_file);
 
@@ -321,7 +325,7 @@ void extract_current_ways(const std::string &dump_file, xml_writer &writer) {
   }
 }
 
-void extract_current_relations(const std::string &dump_file, xml_writer &writer) {
+void extract_current_relations(const std::string &dump_file, pbf_writer &writer) {
   extract_table<current_tag>("current_relation_tags", dump_file);
   extract_table<current_relation_member>("current_relation_members", dump_file);
 
@@ -426,11 +430,16 @@ int main(int argc, char *argv[]) {
     threads.clear();
 
     extract_users(dump_file, display_name_map);
-    xml_writer writer(std::cout, display_name_map);
+    pbf_writer writer(std::cout, display_name_map, max_time);
+    std::cerr << "Writing changesets..." << std::endl;
     extract_changesets(dump_file, writer);
+    std::cerr << "Writing nodes..." << std::endl;
     extract_current_nodes(dump_file, writer);
+    std::cerr << "Writing ways..." << std::endl;
     extract_current_ways(dump_file, writer);
+    std::cerr << "Writing relations..." << std::endl;
     extract_current_relations(dump_file, writer);
+    std::cerr << "Done" << std::endl;
 
   } catch (const boost::exception &e) {
     std::cerr << "EXCEPTION: " << boost::current_exception_diagnostic_information() << "\n";
