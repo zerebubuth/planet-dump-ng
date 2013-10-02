@@ -20,6 +20,7 @@
 #include "types.hpp"
 #include "insert_kv.hpp"
 #include "pbf_writer.hpp"
+#include "xml_writer.hpp"
 
 namespace bt = boost::posix_time;
 namespace fs = boost::filesystem;
@@ -34,6 +35,25 @@ std::string pr_optional(const boost::optional<T> &t) {
   }
 }
 
+struct dual_writer {
+  dual_writer(pbf_writer &pwriter, xml_writer &xwriter) 
+    : m_pwriter(pwriter), m_xwriter(xwriter) {
+  }
+
+  void begin(const changeset &c)        { m_pwriter.begin(c); m_xwriter.begin(c); }
+  void begin(const current_node &n)     { m_pwriter.begin(n); m_xwriter.begin(n); }
+  void begin(const current_way &w)      { m_pwriter.begin(w); m_xwriter.begin(w); }
+  void begin(const current_relation &r) { m_pwriter.begin(r); m_xwriter.begin(r); }
+
+  void add(const current_tag &t)              { m_pwriter.add(t); m_xwriter.add(t); }
+  void add(const current_way_node &wn)        { m_pwriter.add(wn); m_xwriter.add(wn); }
+  void add(const current_relation_member &rm) { m_pwriter.add(rm); m_xwriter.add(rm); }
+
+  void end() { m_pwriter.end(); m_xwriter.end(); }
+
+  pbf_writer &m_pwriter;
+  xml_writer &m_xwriter;
+};
 
 template <typename R>
 void extract_table(const std::string &table_name, 
@@ -226,6 +246,11 @@ struct db_reader {
   leveldb::ReadOptions m_read_options;
 };
 
+template <>
+struct db_reader<int> {
+  db_reader(const std::string &) {}
+};
+
 void extract_users(const std::string &dump_file, std::map<int64_t, std::string> &display_name_map) {
   extract_table<user>("users", dump_file);
 
@@ -239,7 +264,7 @@ void extract_users(const std::string &dump_file, std::map<int64_t, std::string> 
   }
 }
 
-void extract_changesets(const std::string &dump_file, pbf_writer &writer) {
+void extract_changesets(const std::string &dump_file, dual_writer &writer) {
   extract_table<changeset>("changesets", dump_file);
   extract_table<current_tag>("changeset_tags", dump_file);
 
@@ -264,102 +289,72 @@ void extract_changesets(const std::string &dump_file, pbf_writer &writer) {
   }
 }
 
-void extract_current_nodes(const std::string &dump_file, pbf_writer &writer) {
-  extract_table<current_tag>("current_node_tags", dump_file);
+template <typename T> void zero_init(T &);
+template <typename T> int64_t id_of(const T &);
 
-  db_reader<current_node> n_reader("current_nodes");
-  db_reader<current_tag> nt_reader("current_node_tags");
-  current_node n;
-  current_tag nt;
-  nt.element_id = 0;
-  while (n_reader(n)) {
-    writer.begin(n);
-    
-    while (nt.element_id <= n.id) {
-      if (nt.element_id == n.id) {
-        writer.add(nt);
-      }
-      if (!nt_reader(nt)) {
-        break;
-      }
+template <> inline void zero_init<current_tag>(current_tag &t) { t.element_id = 0; }
+template <> inline void zero_init<current_way_node>(current_way_node &wn) { wn.way_id = 0; }
+template <> inline void zero_init<current_relation_member>(current_relation_member &rm) { rm.relation_id = 0; }
+template <> inline void zero_init<int>(int &) { }
+
+template <> inline int64_t id_of<current_tag>(const current_tag &t) { return t.element_id; }
+template <> inline int64_t id_of<current_way_node>(const current_way_node &wn) { return wn.way_id; }
+template <> inline int64_t id_of<current_relation_member>(const current_relation_member &rm) { return rm.relation_id; }
+
+template <typename T>
+inline void fetch_associated(T &t, int64_t id, db_reader<T> &reader, dual_writer &writer) {
+  while (id_of<T>(t) <= id) {
+    if (id_of<T>(t) == id) {
+      writer.add(t);
     }
+    if (!reader(t)) {
+      break;
+    }
+  }
+}
+
+template <>
+inline void fetch_associated<int>(int &, int64_t, db_reader<int> &, dual_writer &) {
+}
+
+template <typename T>
+void extract_element(const std::string &dump_file, dual_writer &writer) {
+  typedef typename T::tag_type tag_type;
+  typedef typename T::inner_type inner_type;
+
+  db_reader<T> element_reader(T::table_name());
+  db_reader<tag_type> tag_reader(T::tag_table_name());
+  db_reader<inner_type> inner_reader(T::inner_table_name());
+
+  T current_element;
+  tag_type current_tag;
+  inner_type current_inner;
+
+  zero_init<tag_type>(current_tag);
+  zero_init<inner_type>(current_inner);
+
+  while (element_reader(current_element)) {
+    if (!current_element.visible) { continue; }
+
+    writer.begin(current_element);
+    
+    fetch_associated(current_inner, current_element.id, inner_reader, writer);
+    fetch_associated(current_tag, current_element.id, tag_reader, writer);
 
     writer.end();
   }
 }
 
-void extract_current_ways(const std::string &dump_file, pbf_writer &writer) {
-  extract_table<current_tag>("current_way_tags", dump_file);
-  extract_table<current_way_node>("current_way_nodes", dump_file);
-
-  db_reader<current_way> w_reader("current_ways");
-  db_reader<current_tag> wt_reader("current_way_tags");
-  db_reader<current_way_node> wn_reader("current_way_nodes");
-  current_way w;
-  current_tag wt;
-  current_way_node wn;
-  wt.element_id = 0;
-  wn.way_id = 0;
-  while (w_reader(w)) {
-    writer.begin(w);
-    
-    while (wn.way_id <= w.id) {
-      if (wn.way_id == w.id) {
-        writer.add(wn);
-      }
-      if (!wn_reader(wn)) {
-        break;
-      }
-    }
-
-    while (wt.element_id <= w.id) {
-      if (wt.element_id == w.id) {
-        writer.add(wt);
-      }
-      if (!wt_reader(wt)) {
-        break;
-      }
-    }
-
-    writer.end();
-  }
+void extract_current_nodes(const std::string &dump_file, dual_writer &writer) {
+  extract_element<current_node>(dump_file, writer);
 }
 
-void extract_current_relations(const std::string &dump_file, pbf_writer &writer) {
-  extract_table<current_tag>("current_relation_tags", dump_file);
-  extract_table<current_relation_member>("current_relation_members", dump_file);
+void extract_current_ways(const std::string &dump_file, dual_writer &writer) {
+  extract_element<current_way>(dump_file, writer);
+}
 
-  db_reader<current_relation> r_reader("current_relations");
-  db_reader<current_tag> rt_reader("current_relation_tags");
-  db_reader<current_relation_member> rm_reader("current_relation_members");
-  current_relation r;
-  current_tag rt;
-  current_relation_member rm;
-  rt.element_id = 0;
-  rm.relation_id = 0;
-  while (r_reader(r)) {
-    writer.begin(r);
-    
-    while (rm.relation_id <= r.id) {
-      if (rm.relation_id == r.id) {
-        writer.add(rm);
-      }
-      if (!rm_reader(rm)) {
-        break;
-      }
-    }
-
-    while (rt.element_id <= r.id) {
-      if (rt.element_id == r.id) {
-        writer.add(rt);
-      }
-      if (!rt_reader(rt)) {
-        break;
-      }
-    }
-
-    writer.end();
-  }
+void extract_current_relations(const std::string &dump_file, dual_writer &writer) {
+  extract_element<current_relation>(dump_file, writer);
 }
 
 struct base_thread {
@@ -397,8 +392,8 @@ struct run_thread : public base_thread {
 
 int main(int argc, char *argv[]) {
   try {
-    if (argc != 2) {
-       throw std::runtime_error("Usage: ./planet-dump <file>");
+    if (argc != 3) {
+       throw std::runtime_error("Usage: ./planet-dump <file> <pbf-file>");
     }
 
     // workaround for https://svn.boost.org/trac/boost/ticket/5638
@@ -430,7 +425,11 @@ int main(int argc, char *argv[]) {
     threads.clear();
 
     extract_users(dump_file, display_name_map);
-    pbf_writer writer(std::cout, display_name_map, max_time);
+    std::ofstream pbf_out(argv[2]);
+    pbf_writer pwriter(pbf_out, display_name_map, max_time);
+    xml_writer xwriter(std::cout, display_name_map, max_time);
+    dual_writer writer(pwriter, xwriter);
+
     std::cerr << "Writing changesets..." << std::endl;
     extract_changesets(dump_file, writer);
     std::cerr << "Writing nodes..." << std::endl;

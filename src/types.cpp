@@ -31,3 +31,14 @@ const std::vector<std::string> &current_way_node::column_names()        { return
 const std::vector<std::string> &current_relation::column_names()        { return current_relation_column_names; }
 const std::vector<std::string> &current_relation_member::column_names() { return current_relation_member_column_names; }
 
+const std::string current_node::table_name() { return "current_nodes"; }
+const std::string current_node::tag_table_name() { return "current_node_tags"; }
+const std::string current_node::inner_table_name() { return ""; }
+
+const std::string current_way::table_name() { return "current_ways"; }
+const std::string current_way::tag_table_name() { return "current_way_tags"; }
+const std::string current_way::inner_table_name() { return "current_way_nodes"; }
+
+const std::string current_relation::table_name() { return "current_relations"; }
+const std::string current_relation::tag_table_name() { return "current_relation_tags"; }
+const std::string current_relation::inner_table_name() { return "current_relation_members"; }

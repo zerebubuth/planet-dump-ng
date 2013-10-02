@@ -83,6 +83,12 @@ BOOST_FUSION_ADAPT_STRUCT(
 struct current_node {
   static const int num_keys = 1;
   static const std::vector<std::string> &column_names();
+  static const std::string table_name();
+  static const std::string tag_table_name();
+  static const std::string inner_table_name();
+
+  typedef current_tag tag_type;
+  typedef int inner_type;
 
   int64_t id;
   int32_t latitude, longitude;
@@ -103,25 +109,6 @@ BOOST_FUSION_ADAPT_STRUCT(
   (int64_t, version)
   )
 
-struct current_way {
-  static const int num_keys = 1;
-  static const std::vector<std::string> &column_names();
-
-  int64_t id, changeset_id;
-  boost::posix_time::ptime timestamp;
-  bool visible;
-  int64_t version;
-};
-
-BOOST_FUSION_ADAPT_STRUCT(
-  current_way,
-  (int64_t, id)
-  (int64_t, changeset_id)
-  (boost::posix_time::ptime, timestamp)
-  (bool, visible)
-  (int64_t, version)
-  )
-
 struct current_way_node { 
   static const std::vector<std::string> &column_names();
 
@@ -135,9 +122,15 @@ BOOST_FUSION_ADAPT_STRUCT(
   (int64_t, sequence_id)
   )
 
-struct current_relation {
+struct current_way {
   static const int num_keys = 1;
   static const std::vector<std::string> &column_names();
+  static const std::string table_name();
+  static const std::string tag_table_name();
+  static const std::string inner_table_name();
+
+  typedef current_tag tag_type;
+  typedef current_way_node inner_type;
 
   int64_t id, changeset_id;
   boost::posix_time::ptime timestamp;
@@ -146,7 +139,7 @@ struct current_relation {
 };
 
 BOOST_FUSION_ADAPT_STRUCT(
-  current_relation,
+  current_way,
   (int64_t, id)
   (int64_t, changeset_id)
   (boost::posix_time::ptime, timestamp)
@@ -171,6 +164,31 @@ BOOST_FUSION_ADAPT_STRUCT(
   (int64_t, member_id)
   (std::string, member_role)
   (int32_t, sequence_id)
+  )
+
+struct current_relation {
+  static const int num_keys = 1;
+  static const std::vector<std::string> &column_names();
+  static const std::string table_name();
+  static const std::string tag_table_name();
+  static const std::string inner_table_name();
+
+  typedef current_tag tag_type;
+  typedef current_relation_member inner_type;
+
+  int64_t id, changeset_id;
+  boost::posix_time::ptime timestamp;
+  bool visible;
+  int64_t version;
+};
+
+BOOST_FUSION_ADAPT_STRUCT(
+  current_relation,
+  (int64_t, id)
+  (int64_t, changeset_id)
+  (boost::posix_time::ptime, timestamp)
+  (bool, visible)
+  (int64_t, version)
   )
 
 #endif /* TYPES_HPP */
