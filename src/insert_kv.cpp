@@ -80,9 +80,11 @@ struct unapp_item {
   int operator()(int, std::string &s) const {
     uint32_t size = 0;
     unsigned char c = 0;
+    uint32_t exponent = 0;
     do {
       in.read((char *)&c, 1);
-      size = (size << 7) | uint32_t(c & 0x7f);
+      size = size | (uint32_t(c & 0x7f) << (7 * exponent));
+      ++exponent;
     } while ((c & 0x80) == 0x80);
 
     s.resize(size);

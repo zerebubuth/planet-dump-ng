@@ -77,7 +77,7 @@ struct app_item {
     }
 
     unsigned char c = 0;
-    while (size > 0x80) {
+    while (size > 0x7f) {
       c = 0x80 | (size & 0x7f);
       out.write((const char *)&c, 1);
       size >>= 7;
