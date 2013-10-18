@@ -11,6 +11,7 @@ ___planet_dump_ng_SOURCES=\
 	planet-dump.cpp \
 	xml_writer.cpp \
 	pbf_writer.cpp \
+	output_writer.cpp \
 	time_epoch.cpp \
 	types.cpp
 

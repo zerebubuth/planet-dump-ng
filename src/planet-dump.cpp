@@ -35,26 +35,6 @@ std::string pr_optional(const boost::optional<T> &t) {
   }
 }
 
-struct dual_writer {
-  dual_writer(pbf_writer &pwriter, xml_writer &xwriter) 
-    : m_pwriter(pwriter), m_xwriter(xwriter) {
-  }
-
-  void begin(const changeset &c)        { m_pwriter.begin(c); m_xwriter.begin(c); }
-  void begin(const current_node &n)     { m_pwriter.begin(n); m_xwriter.begin(n); }
-  void begin(const current_way &w)      { m_pwriter.begin(w); m_xwriter.begin(w); }
-  void begin(const current_relation &r) { m_pwriter.begin(r); m_xwriter.begin(r); }
-
-  void add(const current_tag &t)              { m_pwriter.add(t); m_xwriter.add(t); }
-  void add(const current_way_node &wn)        { m_pwriter.add(wn); m_xwriter.add(wn); }
-  void add(const current_relation_member &rm) { m_pwriter.add(rm); m_xwriter.add(rm); }
-
-  void end() { m_pwriter.end(); m_xwriter.end(); }
-
-  pbf_writer &m_pwriter;
-  xml_writer &m_xwriter;
-};
-
 template <typename R>
 void extract_table(const std::string &table_name, 
                    const std::string &dump_file) {
@@ -264,30 +244,48 @@ void extract_users(const std::string &dump_file, std::map<int64_t, std::string> 
   }
 }
 
-void extract_changesets(const std::string &dump_file, dual_writer &writer) {
-  extract_table<changeset>("changesets", dump_file);
-  extract_table<current_tag>("changeset_tags", dump_file);
+template <typename T>
+struct control_block {
+  typedef typename T::tag_type tag_type;
+  typedef typename T::inner_type inner_type;
 
-  db_reader<changeset> cs_reader("changesets");
-  db_reader<current_tag> cst_reader("changeset_tags");
-  changeset cs;
-  current_tag cst;
-  cst.element_id = 0;
-  while (cs_reader(cs)) {
-    writer.begin(cs);
-
-    while (cst.element_id <= cs.id) {
-      if (cst.element_id == cs.id) {
-        writer.add(cst);
-      }
-      if (!cst_reader(cst)) {
-        break;
-      }
-    }
-
-    writer.end();
+  control_block(unsigned int num_threads)
+  : pre_swap_barrier(num_threads),
+    post_swap_barrier(num_threads),
+    thread_finished_index(-1) {
   }
-}
+
+  boost::barrier pre_swap_barrier, post_swap_barrier;
+
+  int thread_finished_index;
+  boost::mutex thread_finished_mutex;
+  boost::condition_variable thread_finished_cond;
+
+  std::vector<T> elements;
+  std::vector<tag_type> tags;
+  std::vector<inner_type> inners;
+};
+
+template <typename T>
+struct thread_writer {
+  typedef typename T::tag_type tag_type;
+  typedef typename T::inner_type inner_type;
+
+  boost::shared_ptr<control_block<T> > blk;
+
+  thread_writer(boost::shared_ptr<control_block<T> > b) : blk(b) {}
+
+  void write(std::vector<T> &els, std::vector<inner_type> &inners, std::vector<tag_type> &tags) {
+    std::cerr.write("Got block for write\n", 20); std::cerr.flush();
+    blk->pre_swap_barrier.wait();
+    std::swap(els, blk->elements);
+    std::swap(inners, blk->inners);
+    std::swap(tags, blk->tags);
+    blk->post_swap_barrier.wait();
+  }
+};
+
+#define BLOCK_SIZE (1048576)
 
 template <typename T> void zero_init(T &);
 template <typename T> int64_t id_of(const T &);
@@ -302,10 +300,10 @@ template <> inline int64_t id_of<current_way_node>(const current_way_node &wn) {
 template <> inline int64_t id_of<current_relation_member>(const current_relation_member &rm) { return rm.relation_id; }
 
 template <typename T>
-inline void fetch_associated(T &t, int64_t id, db_reader<T> &reader, dual_writer &writer) {
+inline void fetch_associated(T &t, int64_t id, db_reader<T> &reader, std::vector<T> &vec) {
   while (id_of<T>(t) <= id) {
     if (id_of<T>(t) == id) {
-      writer.add(t);
+      vec.push_back(t);
     }
     if (!reader(t)) {
       break;
@@ -314,11 +312,11 @@ inline void fetch_associated(T &t, int64_t id, db_reader<T> &reader, dual_writer
 }
 
 template <>
-inline void fetch_associated<int>(int &, int64_t, db_reader<int> &, dual_writer &) {
+inline void fetch_associated<int>(int &, int64_t, db_reader<int> &, std::vector<int> &) {
 }
 
 template <typename T>
-void extract_element(const std::string &dump_file, dual_writer &writer) {
+void extract_element(const std::string &dump_file, thread_writer<T> &writer) {
   typedef typename T::tag_type tag_type;
   typedef typename T::inner_type inner_type;
 
@@ -326,35 +324,37 @@ void extract_element(const std::string &dump_file, dual_writer &writer) {
   db_reader<tag_type> tag_reader(T::tag_table_name());
   db_reader<inner_type> inner_reader(T::inner_table_name());
 
-  T current_element;
+  std::vector<T> elements;
+  std::vector<tag_type> tags;
+  std::vector<inner_type> inners;
+  
+  elements.resize(BLOCK_SIZE);
+  size_t i = 0;
+
   tag_type current_tag;
   inner_type current_inner;
 
   zero_init<tag_type>(current_tag);
   zero_init<inner_type>(current_inner);
 
-  while (element_reader(current_element)) {
-    if (!current_element.visible) { continue; }
-
-    writer.begin(current_element);
+  while (element_reader(elements[i])) {
+    if (!elements[i].visible) { continue; }
     
-    fetch_associated(current_inner, current_element.id, inner_reader, writer);
-    fetch_associated(current_tag, current_element.id, tag_reader, writer);
+    fetch_associated(current_inner, elements[i].id, inner_reader, inners);
+    fetch_associated(current_tag, elements[i].id, tag_reader, tags);
 
-    writer.end();
+    ++i;
+    if (i == BLOCK_SIZE) {
+      writer.write(elements, inners, tags);
+      inners.clear();
+      tags.clear();
+      i = 0;
+      if (elements.size() != BLOCK_SIZE) { elements.resize(BLOCK_SIZE); }
+    }
   }
-}
 
-void extract_current_nodes(const std::string &dump_file, dual_writer &writer) {
-  extract_element<current_node>(dump_file, writer);
-}
-
-void extract_current_ways(const std::string &dump_file, dual_writer &writer) {
-  extract_element<current_way>(dump_file, writer);
-}
-
-void extract_current_relations(const std::string &dump_file, dual_writer &writer) {
-  extract_element<current_relation>(dump_file, writer);
+  elements.resize(i);
+  writer.write(elements, inners, tags);
 }
 
 struct base_thread {
@@ -389,6 +389,110 @@ struct run_thread : public base_thread {
     return timestamp;
   }
 };
+
+template <typename T>
+void reader_thread(int thread_index, 
+                   boost::exception_ptr exc, 
+                   const std::string &dump_file, 
+                   boost::shared_ptr<control_block<T> > blk) {
+  try {
+    thread_writer<T> writer(blk);
+    extract_element<T>(dump_file, writer);
+
+  } catch (...) {
+    exc = boost::current_exception();
+  }
+
+  boost::lock_guard<boost::mutex> lock(blk->thread_finished_mutex);
+  blk->thread_finished_index = thread_index;
+  blk->thread_finished_cond.notify_one();
+}
+
+template <typename T> void write_elements(output_writer &writer, control_block<T> &blk);
+
+template <> inline void write_elements<current_node>(output_writer &writer, control_block<current_node> &blk) { 
+  writer.nodes(blk.elements, blk.tags);
+}
+template <> inline void write_elements<current_way>(output_writer &writer, control_block<current_way> &blk) { 
+  writer.ways(blk.elements, blk.inners, blk.tags);
+}
+template <> inline void write_elements<current_relation>(output_writer &writer, control_block<current_relation> &blk) { 
+  writer.relations(blk.elements, blk.inners, blk.tags);
+}
+
+template <typename T>
+void writer_thread(int thread_index,
+                   boost::exception_ptr exc,
+                   boost::shared_ptr<output_writer> writer, 
+                   boost::shared_ptr<control_block<T> > blk) {
+  try {
+    do {
+      blk->pre_swap_barrier.wait();
+      blk->post_swap_barrier.wait();
+      
+      std::cerr.write("Got block for read\n", 19); std::cerr.flush();
+      write_elements<T>(*writer, *blk);
+      
+    } while (blk->elements.size() == BLOCK_SIZE);
+
+  } catch (...) {
+    exc = boost::current_exception();
+  }
+
+  boost::lock_guard<boost::mutex> lock(blk->thread_finished_mutex);
+  blk->thread_finished_index = thread_index;
+  blk->thread_finished_cond.notify_one();
+}
+
+void join_all_but(size_t i, std::vector<boost::shared_ptr<boost::thread> > &threads) {
+  for (size_t j = 0; j < threads.size(); ++j) {
+    if ((j != i) && threads[j]->joinable()) {
+      threads[j]->join();
+    }
+  }
+}
+
+template <typename T>
+void run_threads(const std::string &dump_file, 
+                 std::vector<boost::shared_ptr<output_writer> > writers) {
+  std::vector<boost::shared_ptr<boost::thread> > threads;
+  std::vector<boost::exception_ptr> exceptions;
+  const int num_threads = writers.size() + 1;
+  int i = 0, num_running_threads = num_threads;
+
+  exceptions.resize(num_threads);
+  boost::shared_ptr<control_block<T> > blk = boost::make_shared<control_block<T> >(writers.size() + 1);
+
+  threads.push_back(boost::make_shared<boost::thread>(boost::bind(&reader_thread<T>, i, exceptions[i], dump_file, blk)));
+
+  BOOST_FOREACH(boost::shared_ptr<output_writer> writer, writers) {
+    ++i;
+    threads.push_back(boost::make_shared<boost::thread>(boost::bind(&writer_thread<T>, i, exceptions[i], writer, blk)));
+  }
+
+  {
+    boost::unique_lock<boost::mutex> lock(blk->thread_finished_mutex);
+    while (num_running_threads > 0) {
+      blk->thread_finished_cond.wait(lock);
+      int idx = blk->thread_finished_index;
+      
+      if (idx >= 0) {
+        blk->thread_finished_index = -1;
+        
+        boost::shared_ptr<boost::thread> thread = threads[idx];
+        thread->join();
+        --num_running_threads;
+        
+        if (exceptions[idx]) {
+          // interrupt all other threads and join them
+          join_all_but(idx, threads);
+          // re-throw the exception
+          boost::rethrow_exception(exceptions[idx]);
+        }
+      }
+    }
+  }
+}
 
 int main(int argc, char *argv[]) {
   try {
@@ -426,18 +530,18 @@ int main(int argc, char *argv[]) {
 
     extract_users(dump_file, display_name_map);
     std::ofstream pbf_out(argv[2]);
-    pbf_writer pwriter(pbf_out, display_name_map, max_time);
-    xml_writer xwriter(std::cout, display_name_map, max_time);
-    dual_writer writer(pwriter, xwriter);
+    std::vector<boost::shared_ptr<output_writer> > writers;
+    writers.push_back(boost::shared_ptr<output_writer>(new pbf_writer(pbf_out, display_name_map, max_time)));
+    writers.push_back(boost::shared_ptr<output_writer>(new xml_writer(std::cout, display_name_map, max_time)));
 
     std::cerr << "Writing changesets..." << std::endl;
-    extract_changesets(dump_file, writer);
+    //extract_changesets(dump_file, writer);
     std::cerr << "Writing nodes..." << std::endl;
-    extract_current_nodes(dump_file, writer);
+    run_threads<current_node>(dump_file, writers);
     std::cerr << "Writing ways..." << std::endl;
-    extract_current_ways(dump_file, writer);
+    run_threads<current_way>(dump_file, writers);
     std::cerr << "Writing relations..." << std::endl;
-    extract_current_relations(dump_file, writer);
+    run_threads<current_relation>(dump_file, writers);
     std::cerr << "Done" << std::endl;
 
   } catch (const boost::exception &e) {

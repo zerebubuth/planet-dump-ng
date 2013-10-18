@@ -7,6 +7,7 @@
 #include <osmpbf/osmpbf.h>
 
 #include <boost/unordered_map.hpp>
+#include <boost/foreach.hpp>
 
 #include <zlib.h>
 #include <arpa/inet.h>
@@ -284,34 +285,72 @@ pbf_writer::pbf_writer(std::ostream &out, const user_map_t &users,
 pbf_writer::~pbf_writer() {
 }
 
-void pbf_writer::begin(const changeset &cs) {
-  m_impl->add_changeset(cs);
+// void pbf_writer::begin(const changeset &cs) {
+//   m_impl->add_changeset(cs);
+// }
+
+void pbf_writer::nodes(const std::vector<current_node> &ns,
+                       const std::vector<current_tag> &ts) {
+  std::vector<current_tag>::const_iterator tag_itr = ts.begin();
+
+  BOOST_FOREACH(const current_node &n, ns) {
+    m_impl->add_node(n);
+    
+    while ((tag_itr != ts.end()) && (tag_itr->element_id <= n.id)) {
+      if (tag_itr->element_id == n.id) {
+        m_impl->add_tag(*tag_itr);
+      }
+      ++tag_itr;
+    }
+  }    
 }
 
-void pbf_writer::begin(const current_node &n) {
-  m_impl->add_node(n);
+void pbf_writer::ways(const std::vector<current_way> &ws,
+                      const std::vector<current_way_node> &wns,
+                      const std::vector<current_tag> &ts) {
+  std::vector<current_tag>::const_iterator tag_itr = ts.begin();
+  std::vector<current_way_node>::const_iterator nd_itr = wns.begin();
+
+  BOOST_FOREACH(const current_way &w, ws) {
+    m_impl->add_way(w);
+
+    while ((nd_itr != wns.end()) && (nd_itr->way_id <= w.id)) {
+      if (nd_itr->way_id == w.id) {
+        m_impl->add_way_node(*nd_itr);
+      }
+      ++nd_itr;
+    }
+
+    while ((tag_itr != ts.end()) && (tag_itr->element_id <= w.id)) {
+      if (tag_itr->element_id == w.id) {
+        m_impl->add_tag(*tag_itr);
+      }
+      ++tag_itr;
+    }
+  }
 }
 
-void pbf_writer::begin(const current_way &w) {
-  m_impl->add_way(w);
-}
+void pbf_writer::relations(const std::vector<current_relation> &rs,
+                           const std::vector<current_relation_member> &rms,
+                           const std::vector<current_tag> &ts) {
+  std::vector<current_tag>::const_iterator tag_itr = ts.begin();
+  std::vector<current_relation_member>::const_iterator rm_itr = rms.begin();
 
-void pbf_writer::begin(const current_relation &r) {
-  m_impl->add_relation(r);
-}
+  BOOST_FOREACH(const current_relation &r, rs) {
+    m_impl->add_relation(r);
 
-void pbf_writer::add(const current_tag &t) {
-  m_impl->add_tag(t);
-}
+    while ((rm_itr != rms.end()) && (rm_itr->relation_id <= r.id)) {
+      if (rm_itr->relation_id == r.id) {
+        m_impl->add_relation_member(*rm_itr);
+      }
+      ++rm_itr;
+    }
 
-void pbf_writer::add(const current_way_node &wn) {
-  m_impl->add_way_node(wn);
+    while ((tag_itr != ts.end()) && (tag_itr->element_id <= r.id)) {
+      if (tag_itr->element_id == r.id) {
+        m_impl->add_tag(*tag_itr);
+      }
+      ++tag_itr;
+    }
+  }
 }
-
-void pbf_writer::add(const current_relation_member &rm) {
-  m_impl->add_relation_member(rm);
-}
-
-void pbf_writer::end() {
-}
-

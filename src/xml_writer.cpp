@@ -6,6 +6,7 @@
 #include <libxml/xmlwriter.h>
 
 #include <stdexcept>
+#include <boost/foreach.hpp>
 
 #define SCALE (10000000)
 
@@ -24,6 +25,8 @@ struct xml_writer::pimpl {
   void attribute(const char *name, const char *s);
   void attribute(const char *name, const std::string &s);
   void end();
+
+  void add_tag(const current_tag &t);
 
   std::ostream &m_out;
   xmlTextWriterPtr m_writer;
@@ -152,6 +155,13 @@ void xml_writer::pimpl::end() {
   }
 }
 
+void xml_writer::pimpl::add_tag(const current_tag &t) {
+  begin("tag");
+  attribute("k", t.key);
+  attribute("v", t.value);
+  end();
+}
+
 xml_writer::xml_writer(std::ostream &out, const user_map_t &users,
                        const pt::ptime &max_time)
   : m_impl(new pimpl(out, max_time)),
@@ -174,6 +184,7 @@ xml_writer::~xml_writer() {
   m_impl->end(); // </osm>
 }
 
+/*
 void xml_writer::begin(const changeset &cs) {
   m_impl->begin("changeset");
 
@@ -202,87 +213,129 @@ void xml_writer::begin(const changeset &cs) {
     m_impl->attribute("max_lon", double(cs.max_lon.get()) / SCALE);
   }
 }
+*/
 
-void xml_writer::begin(const current_node &n) {
-  m_impl->begin("node");
-  m_impl->attribute("id", n.id);
-  m_impl->attribute("lat", double(n.latitude) / SCALE);
-  m_impl->attribute("lon", double(n.longitude) / SCALE);
-  m_impl->attribute("timestamp", n.timestamp);
-  m_impl->attribute("version", n.version);
-  m_impl->attribute("changeset", n.changeset_id);
+void xml_writer::nodes(const std::vector<current_node> &ns,
+                       const std::vector<current_tag> &ts) {
+  std::vector<current_tag>::const_iterator tag_itr = ts.begin();
 
-  changeset_map_t::const_iterator cs_itr = m_changesets.find(n.changeset_id);
-  if (cs_itr != m_changesets.end()) {
-    user_map_t::const_iterator user_itr = m_users.find(cs_itr->second);
-    if (user_itr != m_users.end()) {
-      m_impl->attribute("user", user_itr->second);
-      m_impl->attribute("uid", user_itr->first);
+  BOOST_FOREACH(const current_node &n, ns) {
+    m_impl->begin("node");
+    m_impl->attribute("id", n.id);
+    m_impl->attribute("lat", double(n.latitude) / SCALE);
+    m_impl->attribute("lon", double(n.longitude) / SCALE);
+    m_impl->attribute("timestamp", n.timestamp);
+    m_impl->attribute("version", n.version);
+    m_impl->attribute("changeset", n.changeset_id);
+
+    changeset_map_t::const_iterator cs_itr = m_changesets.find(n.changeset_id);
+    if (cs_itr != m_changesets.end()) {
+      user_map_t::const_iterator user_itr = m_users.find(cs_itr->second);
+      if (user_itr != m_users.end()) {
+        m_impl->attribute("user", user_itr->second);
+        m_impl->attribute("uid", user_itr->first);
+      }
     }
+
+    while ((tag_itr != ts.end()) && (tag_itr->element_id <= n.id)) {
+      if (tag_itr->element_id == n.id) {
+        m_impl->add_tag(*tag_itr);
+      }
+      ++tag_itr;
+    }
+
+    m_impl->end();
   }
 }
 
-void xml_writer::begin(const current_way &w) {
-  m_impl->begin("way");
-  m_impl->attribute("id", w.id);
-  m_impl->attribute("timestamp", w.timestamp);
-  m_impl->attribute("version", w.version);
-  m_impl->attribute("changeset", w.changeset_id);
+void xml_writer::ways(const std::vector<current_way> &ws,
+                      const std::vector<current_way_node> &wns,
+                      const std::vector<current_tag> &ts) {
+  std::vector<current_tag>::const_iterator tag_itr = ts.begin();
+  std::vector<current_way_node>::const_iterator nd_itr = wns.begin();
 
-  changeset_map_t::const_iterator cs_itr = m_changesets.find(w.changeset_id);
-  if (cs_itr != m_changesets.end()) {
-    user_map_t::const_iterator user_itr = m_users.find(cs_itr->second);
-    if (user_itr != m_users.end()) {
-      m_impl->attribute("user", user_itr->second);
-      m_impl->attribute("uid", user_itr->first);
+  BOOST_FOREACH(const current_way &w, ws) {
+    m_impl->begin("way");
+    m_impl->attribute("id", w.id);
+    m_impl->attribute("timestamp", w.timestamp);
+    m_impl->attribute("version", w.version);
+    m_impl->attribute("changeset", w.changeset_id);
+    
+    changeset_map_t::const_iterator cs_itr = m_changesets.find(w.changeset_id);
+    if (cs_itr != m_changesets.end()) {
+      user_map_t::const_iterator user_itr = m_users.find(cs_itr->second);
+      if (user_itr != m_users.end()) {
+        m_impl->attribute("user", user_itr->second);
+        m_impl->attribute("uid", user_itr->first);
+      }
     }
+
+    while ((nd_itr != wns.end()) && (nd_itr->way_id <= w.id)) {
+      if (nd_itr->way_id == w.id) {
+        m_impl->begin("nd");
+        m_impl->attribute("ref", nd_itr->node_id);
+        m_impl->end();
+      }
+      ++nd_itr;
+    }
+
+    while ((tag_itr != ts.end()) && (tag_itr->element_id <= w.id)) {
+      if (tag_itr->element_id == w.id) {
+        m_impl->add_tag(*tag_itr);
+      }
+      ++tag_itr;
+    }
+
+    m_impl->end();
   }
 }
 
-void xml_writer::begin(const current_relation &r) {
-  m_impl->begin("relation");
-  m_impl->attribute("id", r.id);
-  m_impl->attribute("timestamp", r.timestamp);
-  m_impl->attribute("version", r.version);
-  m_impl->attribute("changeset", r.changeset_id);
+void xml_writer::relations(const std::vector<current_relation> &rs,
+                           const std::vector<current_relation_member> &rms,
+                           const std::vector<current_tag> &ts) {
+  std::vector<current_tag>::const_iterator tag_itr = ts.begin();
+  std::vector<current_relation_member>::const_iterator rm_itr = rms.begin();
 
-  changeset_map_t::const_iterator cs_itr = m_changesets.find(r.changeset_id);
-  if (cs_itr != m_changesets.end()) {
-    user_map_t::const_iterator user_itr = m_users.find(cs_itr->second);
-    if (user_itr != m_users.end()) {
-      m_impl->attribute("user", user_itr->second);
-      m_impl->attribute("uid", user_itr->first);
+  BOOST_FOREACH(const current_relation &r, rs) {
+    m_impl->begin("relation");
+    m_impl->attribute("id", r.id);
+    m_impl->attribute("timestamp", r.timestamp);
+    m_impl->attribute("version", r.version);
+    m_impl->attribute("changeset", r.changeset_id);
+    
+    changeset_map_t::const_iterator cs_itr = m_changesets.find(r.changeset_id);
+    if (cs_itr != m_changesets.end()) {
+      user_map_t::const_iterator user_itr = m_users.find(cs_itr->second);
+      if (user_itr != m_users.end()) {
+        m_impl->attribute("user", user_itr->second);
+        m_impl->attribute("uid", user_itr->first);
+      }
     }
+
+    while ((rm_itr != rms.end()) && (rm_itr->relation_id <= r.id)) {
+      if (rm_itr->relation_id == r.id) {
+        m_impl->begin("member");
+        const char *type = 
+          (rm_itr->member_id == nwr_node) ? "node" :
+          (rm_itr->member_id == nwr_way) ? "way" :
+          "relation";
+        
+        m_impl->attribute("type", type);
+        m_impl->attribute("ref", rm_itr->member_id);
+        m_impl->attribute("role", rm_itr->member_role);
+        m_impl->end();
+      }
+      ++rm_itr;
+    }
+
+    while ((tag_itr != ts.end()) && (tag_itr->element_id <= r.id)) {
+      if (tag_itr->element_id == r.id) {
+        m_impl->add_tag(*tag_itr);
+      }
+      ++tag_itr;
+    }
+
+    m_impl->end();
   }
-}
-
-void xml_writer::add(const current_tag &t) {
-  m_impl->begin("tag");
-  m_impl->attribute("k", t.key);
-  m_impl->attribute("v", t.value);
-  m_impl->end();
-}
-
-void xml_writer::add(const current_way_node &wn) {
-  m_impl->begin("nd");
-  m_impl->attribute("ref", wn.node_id);
-  m_impl->end();
-}
-
-void xml_writer::add(const current_relation_member &rm) {
-  m_impl->begin("member");
-  const char *type = 
-    (rm.member_id == nwr_node) ? "node" :
-    (rm.member_id == nwr_way) ? "way" :
-    "relation";
-
-  m_impl->attribute("type", type);
-  m_impl->attribute("ref", rm.member_id);
-  m_impl->attribute("role", rm.member_role);
-  m_impl->end();
-}
-
-void xml_writer::end() {
-  m_impl->end();
 }
 
