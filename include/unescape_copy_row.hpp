@@ -141,7 +141,7 @@ private:
       int day   = ((str.first[8] - '0') * 10 + (str.first[9] - '0'));
       int hour  = ((str.first[11] - '0') * 10 + (str.first[12] - '0'));
       int min   = ((str.first[14] - '0') * 10 + (str.first[15] - '0'));
-      int sec   = ((str.first[17] - '0') * 10 + (str.first[19] - '0'));
+      int sec   = ((str.first[17] - '0') * 10 + (str.first[18] - '0'));
       t = boost::posix_time::ptime(boost::gregorian::date(year, month, day),
                                    boost::posix_time::time_duration(hour, min, sec));
     }
