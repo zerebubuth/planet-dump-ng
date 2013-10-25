@@ -25,40 +25,6 @@
 namespace bt = boost::posix_time;
 namespace fs = boost::filesystem;
 
-template <typename T>
-std::string pr_optional(const boost::optional<T> &t) {
-  if (t) {
-    T tt = t.get();
-    return (boost::format("%1%") % tt).str();
-  } else {
-    return "<none>";
-  }
-}
-
-template <typename R>
-void extract_table(const std::string &table_name, 
-                   const std::string &dump_file) {
-  typedef R row_type;
-  fs::path base_dir(table_name);
-  bool needs_dump = true;
-
-  if (fs::exists(base_dir)) {
-    if (fs::is_directory(base_dir) && fs::exists(base_dir / ".complete")) {
-      needs_dump = false;
-
-    } else {
-      fs::remove_all(base_dir);
-    }
-  }
-
-  if (needs_dump) {
-    table_extractor<row_type> extractor(table_name, dump_file);
-    extractor.read();
-    fs::ofstream out(base_dir / ".complete");
-    out << "\n";
-  }
-}
-
 template <typename R>
 bt::ptime extract_table_with_timestamp(const std::string &table_name, 
                                        const std::string &dump_file) {
@@ -117,73 +83,6 @@ void thread_extract_with_timestamp(bt::ptime &timestamp,
   }
 }
 
-std::ostream &operator<<(std::ostream &out, const changeset &cs) {
-  out << "changeset(" << cs.id << ", " << cs.uid << ", " << cs.created_at
-      << ", " << pr_optional(cs.min_lon) << ", " << pr_optional(cs.min_lat)
-      << ", " << pr_optional(cs.max_lon) << ", " << pr_optional(cs.max_lat)
-      << ", " << cs.closed_at
-      << ")";
-  return out;
-}
-
-std::ostream &operator<<(std::ostream &out, const current_tag &t) {
-  out << "current_tag(" << t.element_id
-      << ", " << t.key
-      << ", " << t.value
-      << ")";
-  return out;
-}
-
-std::ostream &operator<<(std::ostream &out, const current_node &n) {
-  out << "current_node(" << n.id 
-      << ", " << n.latitude
-      << ", " << n.longitude
-      << ", " << n.changeset_id
-      << ", " << n.visible
-      << ", " << n.timestamp
-      << ", " << n.version
-      << ")";
-  return out;
-}
-
-std::ostream &operator<<(std::ostream &out, const current_way &w) {
-  out << "current_way(" << w.id
-      << ", " << w.changeset_id
-      << ", " << w.timestamp
-      << ", " << w.visible
-      << ", " << w.version
-      << ")";
-  return out;
-}
-
-std::ostream &operator<<(std::ostream &out, const current_way_node &wn) {
-  out << "current_way_node(" << wn.way_id
-      << ", " << wn.node_id
-      << ", " << wn.sequence_id
-      << ")";
-  return out;
-}
-
-std::ostream &operator<<(std::ostream &out, const current_relation &r) {
-  out << "current_relation(" << r.id
-      << ", " << r.changeset_id
-      << ", " << r.timestamp
-      << ", " << r.visible
-      << ", " << r.version
-      << ")";
-  return out;
-}
-
-std::ostream &operator<<(std::ostream &out, const current_relation_member &rm) {
-  out << "current_relation_member(" << rm.relation_id
-      << ", " << rm.member_type
-      << ", " << rm.member_id
-      << ", " << rm.member_role
-      << ", " << rm.sequence_id
-      << ")";
-  return out;
-}
-
 template <typename T>
 struct db_reader {
   db_reader(const std::string &name) : m_db(NULL), m_itr(NULL) {
@@ -232,7 +131,7 @@ struct db_reader<int> {
 };
 
 void extract_users(const std::string &dump_file, std::map<int64_t, std::string> &display_name_map) {
-  extract_table<user>("users", dump_file);
+  extract_table_with_timestamp<user>("users", dump_file);
 
   db_reader<user> reader("users");
   user u;
@@ -291,13 +190,15 @@ template <typename T> void zero_init(T &);
 template <typename T> int64_t id_of(const T &);
 
 template <> inline void zero_init<current_tag>(current_tag &t) { t.element_id = 0; }
-template <> inline void zero_init<current_way_node>(current_way_node &wn) { wn.way_id = 0; }
-template <> inline void zero_init<current_relation_member>(current_relation_member &rm) { rm.relation_id = 0; }
+template <> inline void zero_init<old_tag>(old_tag &t) { t.element_id = 0; }
+template <> inline void zero_init<way_node>(way_node &wn) { wn.way_id = 0; }
+template <> inline void zero_init<relation_member>(relation_member &rm) { rm.relation_id = 0; }
 template <> inline void zero_init<int>(int &) { }
 
 template <> inline int64_t id_of<current_tag>(const current_tag &t) { return t.element_id; }
-template <> inline int64_t id_of<current_way_node>(const current_way_node &wn) { return wn.way_id; }
-template <> inline int64_t id_of<current_relation_member>(const current_relation_member &rm) { return rm.relation_id; }
+template <> inline int64_t id_of<old_tag>(const old_tag &t) { return t.element_id; }
+template <> inline int64_t id_of<way_node>(const way_node &wn) { return wn.way_id; }
+template <> inline int64_t id_of<relation_member>(const relation_member &rm) { return rm.relation_id; }
 
 template <typename T>
 inline void fetch_associated(T &t, int64_t id, db_reader<T> &reader, std::vector<T> &vec) {
@@ -410,13 +311,13 @@ void reader_thread(int thread_index,
 
 template <typename T> void write_elements(output_writer &writer, control_block<T> &blk);
 
-template <> inline void write_elements<current_node>(output_writer &writer, control_block<current_node> &blk) { 
+template <> inline void write_elements<node>(output_writer &writer, control_block<node> &blk) { 
   writer.nodes(blk.elements, blk.tags);
 }
-template <> inline void write_elements<current_way>(output_writer &writer, control_block<current_way> &blk) { 
+template <> inline void write_elements<way>(output_writer &writer, control_block<way> &blk) { 
   writer.ways(blk.elements, blk.inners, blk.tags);
 }
-template <> inline void write_elements<current_relation>(output_writer &writer, control_block<current_relation> &blk) { 
+template <> inline void write_elements<relation>(output_writer &writer, control_block<relation> &blk) { 
   writer.relations(blk.elements, blk.inners, blk.tags);
 }
 
@@ -509,15 +410,16 @@ int main(int argc, char *argv[]) {
     std::list<boost::shared_ptr<base_thread> > threads;
 
     threads.push_back(boost::make_shared<run_thread<changeset> >("changesets", dump_file));
-    threads.push_back(boost::make_shared<run_thread<current_node> >("current_nodes", dump_file));
-    threads.push_back(boost::make_shared<run_thread<current_way> >("current_ways", dump_file));
-    threads.push_back(boost::make_shared<run_thread<current_relation> >("current_relations", dump_file));
+    threads.push_back(boost::make_shared<run_thread<node> >("nodes", dump_file));
+    threads.push_back(boost::make_shared<run_thread<way> >("ways", dump_file));
+    threads.push_back(boost::make_shared<run_thread<relation> >("relations", dump_file));
 
-    threads.push_back(boost::make_shared<run_thread<current_tag> >("current_node_tags", dump_file));
-    threads.push_back(boost::make_shared<run_thread<current_tag> >("current_way_tags", dump_file));
-    threads.push_back(boost::make_shared<run_thread<current_tag> >("current_relation_tags", dump_file));
-    threads.push_back(boost::make_shared<run_thread<current_way_node> >("current_way_nodes", dump_file));
-    threads.push_back(boost::make_shared<run_thread<current_relation_member> >("current_relation_members", dump_file));
+    threads.push_back(boost::make_shared<run_thread<current_tag> >("changeset_tags", dump_file));
+    threads.push_back(boost::make_shared<run_thread<old_tag> >("node_tags", dump_file));
+    threads.push_back(boost::make_shared<run_thread<old_tag> >("way_tags", dump_file));
+    threads.push_back(boost::make_shared<run_thread<old_tag> >("relation_tags", dump_file));
+    threads.push_back(boost::make_shared<run_thread<way_node> >("way_nodes", dump_file));
+    threads.push_back(boost::make_shared<run_thread<relation_member> >("relation_members", dump_file));
 
     threads.push_back(boost::make_shared<run_thread<user> >("users", dump_file));
 
@@ -537,11 +439,11 @@ int main(int argc, char *argv[]) {
     std::cerr << "Writing changesets..." << std::endl;
     //extract_changesets(dump_file, writer);
     std::cerr << "Writing nodes..." << std::endl;
-    run_threads<current_node>(dump_file, writers);
+    run_threads<node>(dump_file, writers);
     std::cerr << "Writing ways..." << std::endl;
-    run_threads<current_way>(dump_file, writers);
+    run_threads<way>(dump_file, writers);
     std::cerr << "Writing relations..." << std::endl;
-    run_threads<current_relation>(dump_file, writers);
+    run_threads<relation>(dump_file, writers);
     std::cerr << "Done" << std::endl;
 
   } catch (const boost::exception &e) {

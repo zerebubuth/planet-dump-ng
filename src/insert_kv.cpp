@@ -164,7 +164,7 @@ void insert_kv(T &t, const leveldb::Slice &key, const leveldb::Slice &val) {
 }
 
 template <>
-void insert_kv<current_way_node>(current_way_node &t, const leveldb::Slice &key, const leveldb::Slice &val) {
+void insert_kv<way_node>(way_node &t, const leveldb::Slice &key, const leveldb::Slice &val) {
   boost::tuple<int64_t, int64_t> t_key;
   boost::tuple<int64_t> t_val;
   from_binary(key, t_key);
@@ -175,7 +175,7 @@ void insert_kv<current_way_node>(current_way_node &t, const leveldb::Slice &key,
 }
 
 template <>
-void insert_kv<current_relation_member>(current_relation_member &t, const leveldb::Slice &key, const leveldb::Slice &val) {
+void insert_kv<relation_member>(relation_member &t, const leveldb::Slice &key, const leveldb::Slice &val) {
   boost::tuple<int64_t, int32_t> t_key;
   boost::tuple<nwr_enum, int64_t, std::string> t_val;
   from_binary(key, t_key);
@@ -190,6 +190,7 @@ void insert_kv<current_relation_member>(current_relation_member &t, const leveld
 template void insert_kv<user>(user &, const leveldb::Slice &, const leveldb::Slice &);
 template void insert_kv<changeset>(changeset &, const leveldb::Slice &, const leveldb::Slice &);
 template void insert_kv<current_tag>(current_tag &, const leveldb::Slice &, const leveldb::Slice &);
-template void insert_kv<current_node>(current_node &, const leveldb::Slice &, const leveldb::Slice &);
-template void insert_kv<current_way>(current_way &, const leveldb::Slice &, const leveldb::Slice &);
-template void insert_kv<current_relation>(current_relation &, const leveldb::Slice &, const leveldb::Slice &);
+template void insert_kv<old_tag>(old_tag &, const leveldb::Slice &, const leveldb::Slice &);
+template void insert_kv<node>(node &, const leveldb::Slice &, const leveldb::Slice &);
+template void insert_kv<way>(way &, const leveldb::Slice &, const leveldb::Slice &);
+template void insert_kv<relation>(relation &, const leveldb::Slice &, const leveldb::Slice &);

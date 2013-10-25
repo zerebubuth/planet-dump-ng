@@ -37,10 +37,10 @@ boost::posix_time::ptime timestamp_of(const T &) {
   return boost::posix_time::ptime(boost::posix_time::neg_infin);
 }
 
-template <> boost::posix_time::ptime timestamp_of<changeset>(const changeset &cs)              { return cs.created_at; }
-template <> boost::posix_time::ptime timestamp_of<current_node>(const current_node &n)         { return n.timestamp; }
-template <> boost::posix_time::ptime timestamp_of<current_way>(const current_way &w)           { return w.timestamp; }
-template <> boost::posix_time::ptime timestamp_of<current_relation>(const current_relation &r) { return r.timestamp; }
+template <> boost::posix_time::ptime timestamp_of<changeset>(const changeset &cs) { return cs.created_at; }
+template <> boost::posix_time::ptime timestamp_of<node>(const node &n)            { return n.timestamp; }
+template <> boost::posix_time::ptime timestamp_of<way>(const way &w)              { return w.timestamp; }
+template <> boost::posix_time::ptime timestamp_of<relation>(const relation &r)    { return r.timestamp; }
 
 template <typename R>
 struct table_extractor_with_timestamp {

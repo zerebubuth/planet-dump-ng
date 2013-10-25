@@ -16,9 +16,9 @@ public:
   xml_writer(std::ostream &, const user_map_t &, const boost::posix_time::ptime &);
   virtual ~xml_writer();
 
-  void nodes(const std::vector<current_node> &, const std::vector<current_tag> &);
-  void ways(const std::vector<current_way> &, const std::vector<current_way_node> &, const std::vector<current_tag> &);
-  void relations(const std::vector<current_relation> &, const std::vector<current_relation_member> &, const std::vector<current_tag> &);
+  void nodes(const std::vector<node> &, const std::vector<old_tag> &);
+  void ways(const std::vector<way> &, const std::vector<way_node> &, const std::vector<old_tag> &);
+  void relations(const std::vector<relation> &, const std::vector<relation_member> &, const std::vector<old_tag> &);
 
   struct pimpl;
 

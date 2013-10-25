@@ -27,6 +27,7 @@ struct xml_writer::pimpl {
   void end();
 
   void add_tag(const current_tag &t);
+  void add_tag(const old_tag &t);
 
   std::ostream &m_out;
   xmlTextWriterPtr m_writer;
@@ -162,6 +163,13 @@ void xml_writer::pimpl::add_tag(const current_tag &t) {
   end();
 }
 
+void xml_writer::pimpl::add_tag(const old_tag &t) {
+  begin("tag");
+  attribute("k", t.key);
+  attribute("v", t.value);
+  end();
+}
+
 xml_writer::xml_writer(std::ostream &out, const user_map_t &users,
                        const pt::ptime &max_time)
   : m_impl(new pimpl(out, max_time)),
@@ -215,11 +223,11 @@ void xml_writer::begin(const changeset &cs) {
 }
 */
 
-void xml_writer::nodes(const std::vector<current_node> &ns,
-                       const std::vector<current_tag> &ts) {
-  std::vector<current_tag>::const_iterator tag_itr = ts.begin();
+void xml_writer::nodes(const std::vector<node> &ns,
+                       const std::vector<old_tag> &ts) {
+  std::vector<old_tag>::const_iterator tag_itr = ts.begin();
 
-  BOOST_FOREACH(const current_node &n, ns) {
+  BOOST_FOREACH(const node &n, ns) {
     m_impl->begin("node");
     m_impl->attribute("id", n.id);
     m_impl->attribute("lat", double(n.latitude) / SCALE);
@@ -248,13 +256,13 @@ void xml_writer::nodes(const std::vector<current_node> &ns,
   }
 }
 
-void xml_writer::ways(const std::vector<current_way> &ws,
-                      const std::vector<current_way_node> &wns,
-                      const std::vector<current_tag> &ts) {
-  std::vector<current_tag>::const_iterator tag_itr = ts.begin();
-  std::vector<current_way_node>::const_iterator nd_itr = wns.begin();
+void xml_writer::ways(const std::vector<way> &ws,
+                      const std::vector<way_node> &wns,
+                      const std::vector<old_tag> &ts) {
+  std::vector<old_tag>::const_iterator tag_itr = ts.begin();
+  std::vector<way_node>::const_iterator nd_itr = wns.begin();
 
-  BOOST_FOREACH(const current_way &w, ws) {
+  BOOST_FOREACH(const way &w, ws) {
     m_impl->begin("way");
     m_impl->attribute("id", w.id);
     m_impl->attribute("timestamp", w.timestamp);
@@ -290,13 +298,13 @@ void xml_writer::ways(const std::vector<current_way> &ws,
   }
 }
 
-void xml_writer::relations(const std::vector<current_relation> &rs,
-                           const std::vector<current_relation_member> &rms,
-                           const std::vector<current_tag> &ts) {
-  std::vector<current_tag>::const_iterator tag_itr = ts.begin();
-  std::vector<current_relation_member>::const_iterator rm_itr = rms.begin();
+void xml_writer::relations(const std::vector<relation> &rs,
+                           const std::vector<relation_member> &rms,
+                           const std::vector<old_tag> &ts) {
+  std::vector<old_tag>::const_iterator tag_itr = ts.begin();
+  std::vector<relation_member>::const_iterator rm_itr = rms.begin();
 
-  BOOST_FOREACH(const current_relation &r, rs) {
+  BOOST_FOREACH(const relation &r, rs) {
     m_impl->begin("relation");
     m_impl->attribute("id", r.id);
     m_impl->attribute("timestamp", r.timestamp);

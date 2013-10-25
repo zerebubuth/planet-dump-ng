@@ -160,7 +160,7 @@ void extract_kv<T>::operator()(T &t, std::string &key, std::string &val) {
 }
 
 template <>
-void extract_kv<current_way_node>::operator()(current_way_node &t, std::string &key, std::string &val) {
+void extract_kv<way_node>::operator()(way_node &t, std::string &key, std::string &val) {
   boost::tuple<int64_t, int64_t> t_key(t.way_id, t.sequence_id);
   boost::tuple<int64_t> t_val(t.node_id);
   key = to_binary(out, t_key);
@@ -168,7 +168,7 @@ void extract_kv<current_way_node>::operator()(current_way_node &t, std::string &
 }
 
 template <>
-void extract_kv<current_relation_member>::operator()(current_relation_member &t, std::string &key, std::string &val) {
+void extract_kv<relation_member>::operator()(relation_member &t, std::string &key, std::string &val) {
   boost::tuple<int64_t, int32_t> t_key(t.relation_id, t.sequence_id);
   boost::tuple<nwr_enum, int64_t, std::string> t_val(t.member_type, t.member_id, t.member_role);
   key = to_binary(out, t_key);
@@ -178,6 +178,7 @@ void extract_kv<current_relation_member>::operator()(current_relation_member &t,
 template struct extract_kv<user>;
 template struct extract_kv<changeset>;
 template struct extract_kv<current_tag>;
-template struct extract_kv<current_node>;
-template struct extract_kv<current_way>;
-template struct extract_kv<current_relation>;
+template struct extract_kv<old_tag>;
+template struct extract_kv<node>;
+template struct extract_kv<way>;
+template struct extract_kv<relation>;

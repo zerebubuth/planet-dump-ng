@@ -51,6 +51,7 @@ struct changeset {
   boost::posix_time::ptime created_at;
   boost::optional<int32_t> min_lat, max_lat, min_lon, max_lon;
   boost::posix_time::ptime closed_at;
+  int32_t num_changes;
 };
 
 BOOST_FUSION_ADAPT_STRUCT(
@@ -63,6 +64,7 @@ BOOST_FUSION_ADAPT_STRUCT(
   (boost::optional<int32_t>, min_lon)
   (boost::optional<int32_t>, max_lon)
   (boost::posix_time::ptime, closed_at)
+  (int32_t, num_changes)
   )
 
 struct current_tag {
@@ -80,115 +82,130 @@ BOOST_FUSION_ADAPT_STRUCT(
   (std::string, value)
   )
 
-struct current_node {
-  static const int num_keys = 1;
+struct old_tag {
+  static const int num_keys = 3;
+  static const std::vector<std::string> &column_names();
+
+  int64_t element_id, version;
+  std::string key, value;
+};
+
+BOOST_FUSION_ADAPT_STRUCT(
+  old_tag,
+  (int64_t, element_id)
+  (int64_t, version)
+  (std::string, key)
+  (std::string, value)
+  )
+
+struct node {
+  static const int num_keys = 2;
   static const std::vector<std::string> &column_names();
   static const std::string table_name();
   static const std::string tag_table_name();
   static const std::string inner_table_name();
 
-  typedef current_tag tag_type;
+  typedef old_tag tag_type;
   typedef int inner_type;
 
-  int64_t id;
-  int32_t latitude, longitude;
-  int64_t changeset_id;
+  int64_t id, version, changeset_id;
   bool visible;
   boost::posix_time::ptime timestamp;
-  int64_t version;
+  int32_t latitude, longitude;
 };
 
 BOOST_FUSION_ADAPT_STRUCT(
-  current_node,
+  node,
   (int64_t, id)
-  (int32_t, latitude)
-  (int32_t, longitude)
+  (int64_t, version)
   (int64_t, changeset_id)
   (bool, visible)
   (boost::posix_time::ptime, timestamp)
-  (int64_t, version)
+  (int32_t, latitude)
+  (int32_t, longitude)
   )
 
-struct current_way_node { 
+struct way_node { 
+  static const int num_keys = 3;
   static const std::vector<std::string> &column_names();
 
-  int64_t way_id, node_id, sequence_id;
+  int64_t way_id, version, sequence_id, node_id;
 };
 
 BOOST_FUSION_ADAPT_STRUCT(
-  current_way_node,
+  way_node,
   (int64_t, way_id)
-  (int64_t, node_id)
+  (int64_t, version)
   (int64_t, sequence_id)
+  (int64_t, node_id)
   )
 
-struct current_way {
-  static const int num_keys = 1;
+struct way {
+  static const int num_keys = 2;
   static const std::vector<std::string> &column_names();
   static const std::string table_name();
   static const std::string tag_table_name();
   static const std::string inner_table_name();
 
-  typedef current_tag tag_type;
-  typedef current_way_node inner_type;
+  typedef old_tag tag_type;
+  typedef way_node inner_type;
 
-  int64_t id, changeset_id;
-  boost::posix_time::ptime timestamp;
+  int64_t id, version, changeset_id;
   bool visible;
-  int64_t version;
+  boost::posix_time::ptime timestamp;
 };
 
 BOOST_FUSION_ADAPT_STRUCT(
-  current_way,
+  way,
   (int64_t, id)
-  (int64_t, changeset_id)
-  (boost::posix_time::ptime, timestamp)
-  (bool, visible)
   (int64_t, version)
+  (int64_t, changeset_id)
+  (bool, visible)
+  (boost::posix_time::ptime, timestamp)
   )
 
-struct current_relation_member {
+struct relation_member {
+  static const int num_keys = 3;
   static const std::vector<std::string> &column_names();
 
-  int64_t relation_id;
+  int64_t relation_id, version, sequence_id;
   nwr_enum member_type;
   int64_t member_id;
   std::string member_role;
-  int32_t sequence_id;
 };
 
 BOOST_FUSION_ADAPT_STRUCT(
-  current_relation_member,
+  relation_member,
   (int64_t, relation_id)
+  (int64_t, version)
+  (int64_t, sequence_id)
   (nwr_enum, member_type)
   (int64_t, member_id)
   (std::string, member_role)
-  (int32_t, sequence_id)
   )
 
-struct current_relation {
-  static const int num_keys = 1;
+struct relation {
+  static const int num_keys = 2;
   static const std::vector<std::string> &column_names();
   static const std::string table_name();
   static const std::string tag_table_name();
   static const std::string inner_table_name();
 
-  typedef current_tag tag_type;
-  typedef current_relation_member inner_type;
+  typedef old_tag tag_type;
+  typedef relation_member inner_type;
 
-  int64_t id, changeset_id;
-  boost::posix_time::ptime timestamp;
+  int64_t id, version, changeset_id;
   bool visible;
-  int64_t version;
+  boost::posix_time::ptime timestamp;
 };
 
 BOOST_FUSION_ADAPT_STRUCT(
-  current_relation,
+  relation,
   (int64_t, id)
-  (int64_t, changeset_id)
-  (boost::posix_time::ptime, timestamp)
-  (bool, visible)
   (int64_t, version)
+  (int64_t, changeset_id)
+  (bool, visible)
+  (boost::posix_time::ptime, timestamp)
   )
 
 #endif /* TYPES_HPP */

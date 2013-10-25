@@ -178,7 +178,7 @@ struct pbf_writer::pimpl {
     check_overflow(element_CHANGESET);
   }
 
-  void add_node(const current_node &n) {
+  void add_node(const node &n) {
     check_overflow(element_NODE);
 
     current_node = pgroup->add_nodes();
@@ -190,7 +190,7 @@ struct pbf_writer::pimpl {
     ++num_elements;
   }
 
-  void add_way(const current_way &w) {
+  void add_way(const way &w) {
     check_overflow(element_WAY);
 
     current_way = pgroup->add_ways();
@@ -201,7 +201,7 @@ struct pbf_writer::pimpl {
     ++num_elements;
   }
 
-  void add_relation(const current_relation &r) {
+  void add_relation(const relation &r) {
     check_overflow(element_RELATION);
 
     current_relation = pgroup->add_relations();
@@ -212,7 +212,7 @@ struct pbf_writer::pimpl {
     ++num_elements;
   }
 
-  void add_tag(const current_tag &t) {
+  void add_tag(const old_tag &t) {
     if (m_current_element == element_NULL) {
       throw std::runtime_error("Tag for NULL element type.");
 
@@ -236,7 +236,7 @@ struct pbf_writer::pimpl {
     }
   }
 
-  void add_way_node(const current_way_node &wn) {
+  void add_way_node(const way_node &wn) {
     if (m_current_element != element_WAY) { throw std::runtime_error("Unexpected way node."); }
     current_way->add_refs(int64_t(wn.node_id) - m_last_way_node_ref);
     m_last_way_node_ref = wn.node_id;
@@ -255,7 +255,7 @@ struct pbf_writer::pimpl {
     }
   }
 
-  void add_relation_member(const current_relation_member &rm) {
+  void add_relation_member(const relation_member &rm) {
     if (m_current_element != element_RELATION) { throw std::runtime_error("Unexpected relation member."); }
     current_relation->add_roles_sid(str_table(rm.member_role));
     current_relation->add_memids(int64_t(rm.member_id) - m_last_relation_member_ref);
@@ -289,11 +289,11 @@ pbf_writer::~pbf_writer() {
 //   m_impl->add_changeset(cs);
 // }
 
-void pbf_writer::nodes(const std::vector<current_node> &ns,
-                       const std::vector<current_tag> &ts) {
-  std::vector<current_tag>::const_iterator tag_itr = ts.begin();
+void pbf_writer::nodes(const std::vector<node> &ns,
+                       const std::vector<old_tag> &ts) {
+  std::vector<old_tag>::const_iterator tag_itr = ts.begin();
 
-  BOOST_FOREACH(const current_node &n, ns) {
+  BOOST_FOREACH(const node &n, ns) {
     m_impl->add_node(n);
     
     while ((tag_itr != ts.end()) && (tag_itr->element_id <= n.id)) {
@@ -305,13 +305,13 @@ void pbf_writer::nodes(const std::vector<current_node> &ns,
   }    
 }
 
-void pbf_writer::ways(const std::vector<current_way> &ws,
-                      const std::vector<current_way_node> &wns,
-                      const std::vector<current_tag> &ts) {
-  std::vector<current_tag>::const_iterator tag_itr = ts.begin();
-  std::vector<current_way_node>::const_iterator nd_itr = wns.begin();
+void pbf_writer::ways(const std::vector<way> &ws,
+                      const std::vector<way_node> &wns,
+                      const std::vector<old_tag> &ts) {
+  std::vector<old_tag>::const_iterator tag_itr = ts.begin();
+  std::vector<way_node>::const_iterator nd_itr = wns.begin();
 
-  BOOST_FOREACH(const current_way &w, ws) {
+  BOOST_FOREACH(const way &w, ws) {
     m_impl->add_way(w);
 
     while ((nd_itr != wns.end()) && (nd_itr->way_id <= w.id)) {
@@ -330,13 +330,13 @@ void pbf_writer::ways(const std::vector<current_way> &ws,
   }
 }
 
-void pbf_writer::relations(const std::vector<current_relation> &rs,
-                           const std::vector<current_relation_member> &rms,
-                           const std::vector<current_tag> &ts) {
-  std::vector<current_tag>::const_iterator tag_itr = ts.begin();
-  std::vector<current_relation_member>::const_iterator rm_itr = rms.begin();
+void pbf_writer::relations(const std::vector<relation> &rs,
+                           const std::vector<relation_member> &rms,
+                           const std::vector<old_tag> &ts) {
+  std::vector<old_tag>::const_iterator tag_itr = ts.begin();
+  std::vector<relation_member>::const_iterator rm_itr = rms.begin();
 
-  BOOST_FOREACH(const current_relation &r, rs) {
+  BOOST_FOREACH(const relation &r, rs) {
     m_impl->add_relation(r);
 
     while ((rm_itr != rms.end()) && (rm_itr->relation_id <= r.id)) {
