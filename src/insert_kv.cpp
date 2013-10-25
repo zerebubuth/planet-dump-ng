@@ -163,34 +163,12 @@ void insert_kv(T &t, const leveldb::Slice &key, const leveldb::Slice &val) {
   from_binary(val, val_range);
 }
 
-template <>
-void insert_kv<way_node>(way_node &t, const leveldb::Slice &key, const leveldb::Slice &val) {
-  boost::tuple<int64_t, int64_t> t_key;
-  boost::tuple<int64_t> t_val;
-  from_binary(key, t_key);
-  from_binary(val, t_val);
-  t.way_id = t_key.get<0>();
-  t.node_id = t_val.get<0>();
-  t.sequence_id = t_key.get<1>();
-}
-
-template <>
-void insert_kv<relation_member>(relation_member &t, const leveldb::Slice &key, const leveldb::Slice &val) {
-  boost::tuple<int64_t, int32_t> t_key;
-  boost::tuple<nwr_enum, int64_t, std::string> t_val;
-  from_binary(key, t_key);
-  from_binary(val, t_val);
-  t.relation_id = t_key.get<0>();
-  t.member_type = t_val.get<0>();
-  t.member_id = t_val.get<1>();
-  t.member_role = t_val.get<2>();
-  t.sequence_id = t_key.get<1>();
-}
-
 template void insert_kv<user>(user &, const leveldb::Slice &, const leveldb::Slice &);
 template void insert_kv<changeset>(changeset &, const leveldb::Slice &, const leveldb::Slice &);
 template void insert_kv<current_tag>(current_tag &, const leveldb::Slice &, const leveldb::Slice &);
 template void insert_kv<old_tag>(old_tag &, const leveldb::Slice &, const leveldb::Slice &);
 template void insert_kv<node>(node &, const leveldb::Slice &, const leveldb::Slice &);
 template void insert_kv<way>(way &, const leveldb::Slice &, const leveldb::Slice &);
+template void insert_kv<way_node>(way_node &, const leveldb::Slice &, const leveldb::Slice &);
 template void insert_kv<relation>(relation &, const leveldb::Slice &, const leveldb::Slice &);
+template void insert_kv<relation_member>(relation_member &, const leveldb::Slice &, const leveldb::Slice &);

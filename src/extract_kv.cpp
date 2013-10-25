@@ -159,26 +159,12 @@ void extract_kv<T>::operator()(T &t, std::string &key, std::string &val) {
   val = to_binary(out, bf::iterator_range<it_key, it_end>(v_key, v_end));
 }
 
-template <>
-void extract_kv<way_node>::operator()(way_node &t, std::string &key, std::string &val) {
-  boost::tuple<int64_t, int64_t> t_key(t.way_id, t.sequence_id);
-  boost::tuple<int64_t> t_val(t.node_id);
-  key = to_binary(out, t_key);
-  val = to_binary(out, t_val);
-}
-
-template <>
-void extract_kv<relation_member>::operator()(relation_member &t, std::string &key, std::string &val) {
-  boost::tuple<int64_t, int32_t> t_key(t.relation_id, t.sequence_id);
-  boost::tuple<nwr_enum, int64_t, std::string> t_val(t.member_type, t.member_id, t.member_role);
-  key = to_binary(out, t_key);
-  val = to_binary(out, t_val);
-}
-
 template struct extract_kv<user>;
 template struct extract_kv<changeset>;
 template struct extract_kv<current_tag>;
 template struct extract_kv<old_tag>;
 template struct extract_kv<node>;
 template struct extract_kv<way>;
+template struct extract_kv<way_node>;
 template struct extract_kv<relation>;
+template struct extract_kv<relation_member>;
