@@ -7,6 +7,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/optional.hpp>
 #include <boost/fusion/include/for_each.hpp>
+#include <boost/format.hpp>
 
 #include "types.hpp"
 

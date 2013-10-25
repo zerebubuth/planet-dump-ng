@@ -5,13 +5,15 @@ AM_CPPFLAGS=-I../include @LEVELDB_CFLAGS@ @LIBXML_CFLAGS@ @BOOST_CPPFLAGS@ @PROT
 bin_PROGRAMS=../planet-dump-ng
 ################################################################################
 ___planet_dump_ng_SOURCES=\
+	copy_elements.cpp \
+	dump_archive.cpp \
 	dump_reader.cpp \
 	extract_kv.cpp \
 	insert_kv.cpp \
-	planet-dump.cpp \
-	xml_writer.cpp \
-	pbf_writer.cpp \
 	output_writer.cpp \
+	pbf_writer.cpp \
+	planet-dump.cpp \
 	time_epoch.cpp \
-	types.cpp
+	types.cpp \
+	xml_writer.cpp
 
