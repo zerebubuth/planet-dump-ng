@@ -111,6 +111,7 @@ struct node {
   int64_t id, version, changeset_id;
   bool visible;
   boost::posix_time::ptime timestamp;
+  boost::optional<int64_t> redaction_id;
   int32_t latitude, longitude;
 };
 
@@ -121,6 +122,7 @@ BOOST_FUSION_ADAPT_STRUCT(
   (int64_t, changeset_id)
   (bool, visible)
   (boost::posix_time::ptime, timestamp)
+  (boost::optional<int64_t>, redaction_id)
   (int32_t, latitude)
   (int32_t, longitude)
   )
@@ -153,6 +155,7 @@ struct way {
   int64_t id, version, changeset_id;
   bool visible;
   boost::posix_time::ptime timestamp;
+  boost::optional<int64_t> redaction_id;
 };
 
 BOOST_FUSION_ADAPT_STRUCT(
@@ -162,6 +165,7 @@ BOOST_FUSION_ADAPT_STRUCT(
   (int64_t, changeset_id)
   (bool, visible)
   (boost::posix_time::ptime, timestamp)
+  (boost::optional<int64_t>, redaction_id)
   )
 
 struct relation_member {
@@ -197,6 +201,7 @@ struct relation {
   int64_t id, version, changeset_id;
   bool visible;
   boost::posix_time::ptime timestamp;
+  boost::optional<int64_t> redaction_id;
 };
 
 BOOST_FUSION_ADAPT_STRUCT(
@@ -206,6 +211,7 @@ BOOST_FUSION_ADAPT_STRUCT(
   (int64_t, changeset_id)
   (bool, visible)
   (boost::posix_time::ptime, timestamp)
+  (boost::optional<int64_t>, redaction_id)
   )
 
 #endif /* TYPES_HPP */
