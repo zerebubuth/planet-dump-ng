@@ -25,8 +25,10 @@ void history_filter<T>::nodes(const std::vector<node> &ns, const std::vector<old
   // handle a left over node, but only if its version list doesn't continue into
   // this block - if it does, then we can ignore the left over one.
   if (m_left_over_nodes && (ns.empty() || (ns[0].id > m_left_over_nodes->n.id))) {
-    cn.push_back(m_left_over_nodes->n);
-    std::swap(m_left_over_nodes->tags, ct);
+    if (m_left_over_nodes->n.visible) {
+      cn.push_back(m_left_over_nodes->n);
+      std::swap(m_left_over_nodes->tags, ct);
+    }
   }
 
   std::vector<old_tag>::const_iterator t_itr = ts.begin();
@@ -35,6 +37,10 @@ void history_filter<T>::nodes(const std::vector<node> &ns, const std::vector<old
   for (size_t i = 1; i < ns.size(); ++i) {
     if (ns[i].id > ns[i-1].id) {
       const node &nn = ns[i-1];
+      // if the node is deleted, we don't want it in the non-history
+      // file, so skip to the next item.
+      if (!nn.visible) { continue; }
+
       cn.push_back(nn);
 
       while ((t_itr != t_end) && (t_itr->element_id <= nn.id)) {
@@ -82,9 +88,11 @@ void history_filter<T>::ways(const std::vector<way> &ws, const std::vector<way_n
   // handle a left over way, but only if its version list doesn't continue into
   // this block - if it does, then we can ignore the left over one.
   if (m_left_over_ways && (ws.empty() || (ws[0].id > m_left_over_ways->w.id))) {
-    cw.push_back(m_left_over_ways->w);
-    std::swap(m_left_over_ways->nodes, cwn);
-    std::swap(m_left_over_ways->tags, ct);
+    if (m_left_over_ways->w.visible) {
+      cw.push_back(m_left_over_ways->w);
+      std::swap(m_left_over_ways->nodes, cwn);
+      std::swap(m_left_over_ways->tags, ct);
+    }
   }
 
   std::vector<way_node>::const_iterator n_itr = wns.begin();
@@ -95,6 +103,10 @@ void history_filter<T>::ways(const std::vector<way> &ws, const std::vector<way_n
   for (size_t i = 1; i < ws.size(); ++i) {
     if (ws[i].id > ws[i-1].id) {
       const way &ww = ws[i-1];
+      // if the way is deleted, we don't want it in the non-history
+      // file, so skip to the next item.
+      if (!ww.visible) { continue; }
+
       cw.push_back(ww);
 
       while ((n_itr != n_end) && (n_itr->way_id <= ww.id)) {
@@ -157,9 +169,11 @@ void history_filter<T>::relations(const std::vector<relation> &rs, const std::ve
   // handle a left over relation, but only if its version list doesn't continue into
   // this block - if it does, then we can ignore the left over one.
   if (m_left_over_relations && (rs.empty() || (rs[0].id > m_left_over_relations->r.id))) {
-    cr.push_back(m_left_over_relations->r);
-    std::swap(m_left_over_relations->members, crm);
-    std::swap(m_left_over_relations->tags, ct);
+    if (m_left_over_relations->r.visible) {
+      cr.push_back(m_left_over_relations->r);
+      std::swap(m_left_over_relations->members, crm);
+      std::swap(m_left_over_relations->tags, ct);
+    }
   }
 
   std::vector<relation_member>::const_iterator m_itr = rms.begin();
@@ -170,6 +184,10 @@ void history_filter<T>::relations(const std::vector<relation> &rs, const std::ve
   for (size_t i = 1; i < rs.size(); ++i) {
     if (rs[i].id > rs[i-1].id) {
       const relation &rr = rs[i-1];
+      // if the relation is deleted, we don't want it in the non-history
+      // file, so skip to the next item.
+      if (!rr.visible) { continue; }
+
       cr.push_back(rr);
 
       while ((m_itr != m_end) && (m_itr->relation_id <= rr.id)) {
