@@ -54,7 +54,6 @@ struct thread_writer {
   thread_writer(boost::shared_ptr<control_block<T> > b) : blk(b) {}
 
   void write(std::vector<T> &els, std::vector<inner_type> &inners, std::vector<tag_type> &tags) {
-    std::cerr.write("Got block for write\n", 20); std::cerr.flush();
     blk->pre_swap_barrier.wait();
     std::swap(els, blk->elements);
     std::swap(inners, blk->inners);
@@ -222,7 +221,6 @@ void writer_thread(int thread_index,
       blk->pre_swap_barrier.wait();
       blk->post_swap_barrier.wait();
       
-      std::cerr.write("Got block for read\n", 19); std::cerr.flush();
       write_elements<T>(*writer, *blk);
       
     } while (blk->elements.size() == BLOCK_SIZE);

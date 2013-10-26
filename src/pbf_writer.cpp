@@ -135,7 +135,6 @@ struct pbf_writer::pimpl {
     out << blob_header.SerializeAsString();
     out << blob.SerializeAsString();
     out.flush();
-    std::cerr << "FLUSHED BLOCK" << std::endl;
   }
 
   void check_overflow(element_type type) {
