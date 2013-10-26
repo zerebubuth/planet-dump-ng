@@ -165,7 +165,9 @@ void extract_element(const std::string &dump_file, thread_writer<T> &writer) {
   zero_init<inner_type>(current_inner);
 
   while (element_reader(elements[i])) {
-    if (!elements[i].visible) { continue; }
+    // skip all redacted elements - they don't appear in the output
+    // at all.
+    if (elements[i].redaction_id) { continue; }
     
     fetch_associated(current_inner, elements[i].id, inner_reader, inners);
     fetch_associated(current_tag, elements[i].id, tag_reader, tags);
