@@ -211,30 +211,30 @@ struct pbf_writer::pimpl {
 
   void add_tag(const old_tag &t) {
     if (m_current_element == element_NULL) {
-      throw std::runtime_error("Tag for NULL element type.");
+      BOOST_THROW_EXCEPTION(std::runtime_error("Tag for NULL element type."));
 
     } else if (m_current_element == element_CHANGESET) {
       // OSMPBF brokenness - do nothing here.
 
     } else if (m_current_element == element_NODE) {
-      if (current_node == NULL) { throw std::runtime_error("Tag before node? oops."); }
+      if (current_node == NULL) { BOOST_THROW_EXCEPTION(std::runtime_error("Tag before node? oops.")); }
       current_node->add_keys(str_table(t.key));
       current_node->add_vals(str_table(t.value));
 
     } else if (m_current_element == element_WAY) {
-      if (current_way == NULL) { throw std::runtime_error("Tag before way? oops."); }
+      if (current_way == NULL) { BOOST_THROW_EXCEPTION(std::runtime_error("Tag before way? oops.")); }
       current_way->add_keys(str_table(t.key));
       current_way->add_vals(str_table(t.value));
 
     } else if (m_current_element == element_RELATION) {
-      if (current_relation == NULL) { throw std::runtime_error("Tag before relation? oops."); }
+      if (current_relation == NULL) { BOOST_THROW_EXCEPTION(std::runtime_error("Tag before relation? oops.")); }
       current_relation->add_keys(str_table(t.key));
       current_relation->add_vals(str_table(t.value));
     }
   }
 
   void add_way_node(const way_node &wn) {
-    if (m_current_element != element_WAY) { throw std::runtime_error("Unexpected way node."); }
+    if (m_current_element != element_WAY) { BOOST_THROW_EXCEPTION(std::runtime_error("Unexpected way node.")); }
     current_way->add_refs(int64_t(wn.node_id) - m_last_way_node_ref);
     m_last_way_node_ref = wn.node_id;
   }
@@ -253,7 +253,7 @@ struct pbf_writer::pimpl {
   }
 
   void add_relation_member(const relation_member &rm) {
-    if (m_current_element != element_RELATION) { throw std::runtime_error("Unexpected relation member."); }
+    if (m_current_element != element_RELATION) { BOOST_THROW_EXCEPTION(std::runtime_error("Unexpected relation member.")); }
     current_relation->add_roles_sid(str_table(rm.member_role));
     current_relation->add_memids(int64_t(rm.member_id) - m_last_relation_member_ref);
     current_relation->add_types(member_type(rm.member_type));

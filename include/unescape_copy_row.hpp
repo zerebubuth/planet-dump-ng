@@ -54,23 +54,24 @@ private:
     columns.reserve(sz);
     for (size_t i = 0; i < sz; ++i) {
       if (i >= m_reorder.size()) {
-        throw std::runtime_error("Index exceeds m_reorder.size(), this is a bug.");
+        BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Index %1% exceeds m_reorder.size() %2%, this is a bug.") 
+                                                  % i % m_reorder.size()).str()));
       }
       size_t j = m_reorder[i];
       if (j >= old_columns.size()) {
-        throw std::runtime_error("Reordered index exceeds old_columns.size(), this is a bug.");
+        BOOST_THROW_EXCEPTION(std::runtime_error("Reordered index exceeds old_columns.size(), this is a bug."));
       }
       columns.push_back(old_columns[j]);
     }
 
     if (columns.size() != sz) {
-      throw std::runtime_error((boost::format("Wrong number of columns: expecting %1%, got %2% in line `%3%'.") 
-                                % sz % columns.size() % line).str());
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Wrong number of columns: expecting %1%, got %2% in line `%3%'.") 
+                                                % sz % columns.size() % line).str()));
     }
     try {
       set_values(row, columns);
     } catch (const std::exception &e) {
-      throw std::runtime_error((boost::format("%1%: in line `%2%'.") % e.what() % line).str());
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("%1%: in line `%2%'.") % e.what() % line).str()));
     }
   }
 
@@ -91,7 +92,7 @@ private:
         b = false;
         break;
       default:
-        throw std::runtime_error((boost::format("Unrecognised value for bool: `%1%'") % str.first).str());
+        BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Unrecognised value for bool: `%1%'") % str.first).str()));
       }
     }
 
@@ -131,8 +132,8 @@ private:
       //           12345678901234567890
       // format is 2013-09-11 13:39:52.742365
       if (str.second < 19) { 
-        throw std::runtime_error((boost::format("Unexpected format for timestamp: `%1%'.") 
-                                  % str.first).str());
+        BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Unexpected format for timestamp: `%1%'.") 
+                                                  % str.first).str()));
       }
       int year  = ((str.first[0] - '0') * 1000 +
                    (str.first[1] - '0') * 100 +
@@ -174,7 +175,7 @@ private:
       } else if (strncmp(str.first, "deleted", str.second) == 0) {
         e = user_status_deleted;
       } else {
-        throw std::runtime_error((boost::format("Unrecognised value for user_status_enum: `%1%'.") % str.first).str());
+        BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Unrecognised value for user_status_enum: `%1%'.") % str.first).str()));
       }
     }
 
@@ -188,7 +189,7 @@ private:
       } else if (strncmp(str.first, "text", str.second) == 0) {
         e = format_text;
       } else {
-        throw std::runtime_error((boost::format("Unrecognised value for format_enum: `%1%'.") % str.first).str());
+        BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Unrecognised value for format_enum: `%1%'.") % str.first).str()));
       }
     }
 
@@ -202,7 +203,7 @@ private:
       } else if (strncmp(str.first, "Relation", str.second) == 0) {
         e = nwr_relation;
       } else {
-        throw std::runtime_error((boost::format("Unrecognised value for nwr_enum: `%1%'.") % str.first).str());
+        BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Unrecognised value for nwr_enum: `%1%'.") % str.first).str()));
       }
     }
 
@@ -237,7 +238,7 @@ private:
         return 10 + int(ch - 'A');
 
       default:
-        throw std::runtime_error("Invalid hex digit.");
+        BOOST_THROW_EXCEPTION(std::runtime_error("Invalid hex digit."));
       }
     }
 
@@ -245,7 +246,7 @@ private:
       if ((ch >= '0') && (ch <= '7')) {
         return int(ch - '0');
       } else {
-        throw std::runtime_error("Invalid octal digit.");
+        BOOST_THROW_EXCEPTION(std::runtime_error("Invalid octal digit."));
       }
     }
 
@@ -289,7 +290,7 @@ private:
               if (i < end) {
               } else {
                 str[j] = char(hex2digit(str[i-1]) * 16 + hex2digit(str[i]));
-                throw std::runtime_error("Unterminated hex escape sequence.");
+                BOOST_THROW_EXCEPTION(std::runtime_error("Unterminated hex escape sequence."));
               }
               break;
 
@@ -305,7 +306,7 @@ private:
               if (i < end) {
                 str[j] = char(oct2digit(str[i-2]) * 64 + oct2digit(str[i-1]) * 8 + oct2digit(str[i]));
               } else {
-                throw std::runtime_error("Unterminated octal escape sequence.");
+                BOOST_THROW_EXCEPTION(std::runtime_error("Unterminated octal escape sequence."));
               }
               break;
 
@@ -315,7 +316,7 @@ private:
             }
             
           } else {
-            throw std::runtime_error("Unterminated escape sequence.");
+            BOOST_THROW_EXCEPTION(std::runtime_error("Unterminated escape sequence."));
           }
           break;
           
@@ -353,7 +354,7 @@ private:
           for (std::vector<std::string>::const_iterator jtr = names.begin(); jtr != names.end(); ++jtr) {
             ostr << "\"" << *jtr << "\", ";
           }
-          throw std::runtime_error(ostr.str());
+          BOOST_THROW_EXCEPTION(std::runtime_error(ostr.str()));
         }
         j = std::distance(names.begin(), itr);
       }

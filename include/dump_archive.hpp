@@ -18,8 +18,9 @@ struct run_thread : public base_thread {
   boost::posix_time::ptime timestamp;
   boost::exception_ptr error;
   boost::thread thr;
+  std::string table_name;
 
-  run_thread(std::string table_name, std::string dump_file);
+  run_thread(std::string table_name_, std::string dump_file);
   ~run_thread();
   boost::posix_time::ptime join();
 };

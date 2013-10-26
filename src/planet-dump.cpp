@@ -45,13 +45,13 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
   }
 
   if (vm.count("dump-file") == 0) {
-    throw std::runtime_error("A PostgreSQL table dump file (--dump-file) must be provided.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("A PostgreSQL table dump file (--dump-file) must be provided."));
   }
 
   if ((vm.count("xml") + vm.count("history-xml") +
        vm.count("pbf") + vm.count("history-pbf")) == 0) {
-    throw std::runtime_error("No output file provided! You must provide one or more of "
-                             "--xml, --history-xml, --pbf or --history-pbf to get output.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("No output file provided! You must provide one or more of "
+                                             "--xml, --history-xml, --pbf or --history-pbf to get output."));
   }
 }
 

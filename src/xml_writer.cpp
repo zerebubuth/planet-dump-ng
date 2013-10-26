@@ -73,20 +73,20 @@ static int wrap_write(void *context, const char *buffer, int len) {
   xml_writer::pimpl *impl = static_cast<xml_writer::pimpl *>(context);
 
   if (impl == NULL) {
-    throw std::runtime_error("State object NULL in wrap_write.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("State object NULL in wrap_write."));
   }
   if (impl->m_out == NULL) {
-    throw std::runtime_error("Output pipe NULL in wrap_write.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Output pipe NULL in wrap_write."));
   }
 
   if (len < 0) {
-    throw std::runtime_error("Negative length in wrap_write.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Negative length in wrap_write."));
   }
   const size_t slen = len;
 
   const size_t status = fwrite(buffer, 1, slen, impl->m_out);
   if (status < slen) {
-    throw std::runtime_error("Failed to write to output stream.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Failed to write to output stream."));
   }
   return len;
 }
@@ -95,15 +95,15 @@ static int wrap_close(void *context) {
   xml_writer::pimpl *impl = static_cast<xml_writer::pimpl *>(context);
 
   if (impl == NULL) {
-    throw std::runtime_error("State object NULL in wrap_close.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("State object NULL in wrap_close."));
   }
   if (impl->m_out == NULL) {
-    throw std::runtime_error("Output pipe NULL in wrap_close.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Output pipe NULL in wrap_close."));
   }
 
   int status = pclose(impl->m_out);
   if (status == -1) {
-    throw std::runtime_error("Output pipe could not be closed in wrap_close.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Output pipe could not be closed in wrap_close."));
   }
   impl->m_out = NULL;
 
@@ -115,7 +115,7 @@ xml_writer::pimpl::pimpl(const std::string &file_name, const std::string &compre
     m_out(popen(m_command.c_str(), "w")), m_writer(NULL), m_now(now) {
 
   if (m_out == NULL) {
-    throw std::runtime_error("Unable to popen compression command for output.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to popen compression command for output."));
   }
 
   xmlOutputBufferPtr output_buffer =
@@ -125,12 +125,12 @@ xml_writer::pimpl::pimpl(const std::string &file_name, const std::string &compre
   if (m_writer == NULL) {
     free(output_buffer);
 
-    throw std::runtime_error("Unable to create xmlTextWriter.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to create xmlTextWriter."));
   }
 
   xmlTextWriterSetIndent(m_writer, 1);
   if (xmlTextWriterStartDocument(m_writer, NULL, "UTF-8", NULL) < 0) {
-    throw std::runtime_error("Unable to start document.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to start document."));
   }
 }
 
@@ -154,7 +154,7 @@ void xml_writer::pimpl::finish() {
 
 void xml_writer::pimpl::begin(const char *name) {
   if (xmlTextWriterStartElement(m_writer, BAD_CAST name) < 0) {
-    throw std::runtime_error("Unable to begin element XML.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to begin element XML."));
   }
 }
 
@@ -163,7 +163,7 @@ void xml_writer::pimpl::attribute(const char *name, bool b) {
   if (xmlTextWriterWriteAttribute(m_writer, 
                                   BAD_CAST name,
                                   BAD_CAST value) < 0) {
-    throw std::runtime_error("Unable to write boolean attribute.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write boolean attribute."));
   }
 }
 
@@ -171,7 +171,7 @@ void xml_writer::pimpl::attribute(const char *name, int32_t i) {
   if (xmlTextWriterWriteFormatAttribute(m_writer, 
                                         BAD_CAST name,
                                         "%d", i) < 0) {
-    throw std::runtime_error("Unable to write int32 attribute.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write int32 attribute."));
   }
 }
 
@@ -179,7 +179,7 @@ void xml_writer::pimpl::attribute(const char *name, int64_t i) {
   if (xmlTextWriterWriteFormatAttribute(m_writer, 
                                         BAD_CAST name,
                                         "%ld", i) < 0) {
-    throw std::runtime_error("Unable to write int64 attribute.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write int64 attribute."));
   }
 }
 
@@ -187,7 +187,7 @@ void xml_writer::pimpl::attribute(const char *name, double d) {
   if (xmlTextWriterWriteFormatAttribute(m_writer, 
                                         BAD_CAST name,
                                         "%.7f", d) < 0) {
-    throw std::runtime_error("Unable to write double attribute.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write double attribute."));
   }
 }
 
@@ -196,7 +196,7 @@ void xml_writer::pimpl::attribute(const char *name, const pt::ptime &t) {
   if (xmlTextWriterWriteAttribute(m_writer, 
                                   BAD_CAST name,
                                   BAD_CAST ts.c_str()) < 0) {
-    throw std::runtime_error("Unable to write timestamp attribute.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write timestamp attribute."));
   }
 }
 
@@ -204,7 +204,7 @@ void xml_writer::pimpl::attribute(const char *name, const char *s) {
   if (xmlTextWriterWriteAttribute(m_writer, 
                                   BAD_CAST name,
                                   BAD_CAST s) < 0) {
-    throw std::runtime_error("Unable to write string attribute.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write string attribute."));
   }
 }
 
@@ -212,13 +212,13 @@ void xml_writer::pimpl::attribute(const char *name, const std::string &s) {
   if (xmlTextWriterWriteAttribute(m_writer, 
                                   BAD_CAST name,
                                   BAD_CAST s.c_str()) < 0) {
-    throw std::runtime_error("Unable to write string attribute.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write string attribute."));
   }
 }
 
 void xml_writer::pimpl::end() {
   if (xmlTextWriterEndElement(m_writer) < 0) {
-    throw std::runtime_error("Unable to end element XML.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to end element XML."));
   }
 }
 

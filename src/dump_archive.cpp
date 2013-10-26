@@ -25,6 +25,9 @@ namespace fs = boost::filesystem;
 
 namespace {
 
+struct tag_table_name;
+typedef boost::error_info<tag_table_name, std::string> errinfo_table_name;
+
 template <typename R>
 bt::ptime extract_table_with_timestamp(const std::string &table_name, 
                                        const std::string &dump_file) {
@@ -88,10 +91,12 @@ void thread_extract_with_timestamp(bt::ptime &timestamp,
 base_thread::~base_thread() {}
 
 template <typename R>
-run_thread<R>::run_thread(std::string table_name, std::string dump_file)
-  : timestamp(), error(), thr(&thread_extract_with_timestamp<R>,
-                              boost::ref(timestamp), boost::ref(error),
-                              table_name, dump_file) {
+run_thread<R>::run_thread(std::string table_name_, std::string dump_file)
+  : timestamp(), error(), 
+    thr(&thread_extract_with_timestamp<R>,
+        boost::ref(timestamp), boost::ref(error),
+        table_name_, dump_file),
+    table_name(table_name_) {
 }
 
 template <typename R>
@@ -106,7 +111,9 @@ template <typename R>
 bt::ptime run_thread<R>::join() {
   thr.join();
   if (error) {
-    boost::rethrow_exception(error);
+    boost::throw_exception(boost::enable_error_info(std::runtime_error("Error during archive dump to LevelDB."))
+                           << boost::errinfo_nested_exception(error)
+                           << errinfo_table_name(table_name));
   }
   return timestamp;
 }

@@ -72,7 +72,7 @@ struct db_reader {
     leveldb::Status status;
     status = leveldb::DB::Open(m_options, name, &m_db);
     if (!status.ok()) {
-      throw std::runtime_error((boost::format("Can't open database: %1%") % status.ToString()).str());
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Can't open database: %1%") % status.ToString()).str()));
     }
 
     m_itr = m_db->NewIterator(m_read_options);

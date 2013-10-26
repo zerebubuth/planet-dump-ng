@@ -73,7 +73,7 @@ struct app_item {
   int operator()(int, const std::string &s) const {
     uint32_t size = s.size();
     if (size > size_t(std::numeric_limits<uint32_t>::max())) {
-      throw std::runtime_error("String length too long.");
+      BOOST_THROW_EXCEPTION(std::runtime_error("String length too long."));
     }
 
     unsigned char c = 0;
@@ -91,12 +91,12 @@ struct app_item {
   
   int operator()(int, const bt::ptime &t) const {
     if (t < time_epoch) {
-      throw std::runtime_error("Time is before epoch.");
+      BOOST_THROW_EXCEPTION(std::runtime_error("Time is before epoch."));
     }
     bt::time_duration dt = t - time_epoch;
     long seconds = dt.total_seconds();
     if (seconds > long(std::numeric_limits<uint32_t>::max())) {
-      throw std::runtime_error("Time is too late after epoch.");
+      BOOST_THROW_EXCEPTION(std::runtime_error("Time is too late after epoch."));
     }
     operator()(0, uint32_t(seconds));
     return 0;
