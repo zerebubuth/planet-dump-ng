@@ -6,10 +6,10 @@ const char *user_column_names_[] = { "id", "display_name", "data_public" };
 const char *changeset_column_names_[] = { "id", "user_id", "created_at", "min_lat", "max_lat", "min_lon", "max_lon", "closed_at", "num_changes" };
 const char *current_tag_column_names_[] = { "*", "k", "v" };
 const char *old_tag_column_names_[] = { "*", "version", "k", "v" };
-const char *node_column_names_[] = { "node_id", "version", "changeset_id", "visible", "timestamp", "latitude", "longitude" };
-const char *way_column_names_[] = { "way_id", "version", "changeset_id", "visible", "timestamp" };
+const char *node_column_names_[] = { "node_id", "version", "changeset_id", "visible", "timestamp", "redaction_id", "latitude", "longitude" };
+const char *way_column_names_[] = { "way_id", "version", "changeset_id", "visible", "timestamp", "redaction_id" };
 const char *way_node_column_names_[] = { "way_id", "version", "sequence_id", "node_id" };
-const char *relation_column_names_[] = { "relation_id", "version", "changeset_id", "visible", "timestamp" };
+const char *relation_column_names_[] = { "relation_id", "version", "changeset_id", "visible", "timestamp", "redaction_id" };
 const char *relation_member_column_names_[] = { "relation_id", "version", "sequence_id", "member_type", "member_id", "member_role" };
 
 const std::vector<std::string> user_column_names = std::vector<std::string>(user_column_names_, user_column_names_ + sizeof(user_column_names_) / sizeof(*user_column_names_));
