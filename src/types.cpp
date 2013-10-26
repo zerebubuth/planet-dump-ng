@@ -34,6 +34,10 @@ const std::vector<std::string> &way_node::column_names()        { return way_nod
 const std::vector<std::string> &relation::column_names()        { return relation_column_names; }
 const std::vector<std::string> &relation_member::column_names() { return relation_member_column_names; }
 
+const std::string changeset::table_name() { return "changesets"; }
+const std::string changeset::tag_table_name() { return "changeset_tags"; }
+const std::string changeset::inner_table_name() { return ""; }
+
 const std::string node::table_name() { return "nodes"; }
 const std::string node::tag_table_name() { return "node_tags"; }
 const std::string node::inner_table_name() { return ""; }

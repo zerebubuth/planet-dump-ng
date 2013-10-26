@@ -20,6 +20,7 @@ struct output_writer : private boost::noncopyable {
   // dump a chunk of elements. included are the associated tags and other
   // inner types for that element. the chunk will be already ordered and
   // the inner types ordered by the (id, version) of their element.
+  virtual void changesets(const std::vector<changeset> &, const std::vector<current_tag> &) = 0;
   virtual void nodes(const std::vector<node> &, const std::vector<old_tag> &) = 0;
   virtual void ways(const std::vector<way> &, const std::vector<way_node> &, const std::vector<old_tag> &) = 0;
   virtual void relations(const std::vector<relation> &, const std::vector<relation_member> &, const std::vector<old_tag> &) = 0;

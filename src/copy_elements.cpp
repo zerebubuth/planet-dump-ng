@@ -127,9 +127,15 @@ template <> inline int64_t id_of<way_node>(const way_node &wn) { return wn.way_i
 template <> inline int64_t id_of<relation_member>(const relation_member &rm) { return rm.relation_id; }
 
 template <typename T>
-inline void fetch_associated(T &t, int64_t id, db_reader<T> &reader, std::vector<T> &vec) {
-  while (id_of<T>(t) <= id) {
-    if (id_of<T>(t) == id) {
+inline int64_t version_of(const T &t) { return t.version; }
+
+template <> inline int64_t version_of<changeset>(const changeset &) { return 0; }
+template <> inline int64_t version_of<current_tag>(const current_tag &t) { return 0; }
+
+template <typename T>
+inline void fetch_associated(T &t, int64_t id, int64_t version, db_reader<T> &reader, std::vector<T> &vec) {
+  while ((id_of<T>(t) < id) || ((id_of<T>(t) == id) && (version_of<T>(t) <= version))) {
+    if ((id_of<T>(t) == id) && (version_of<T>(t) == version)) {
       vec.push_back(t);
     }
     if (!reader(t)) {
@@ -139,11 +145,16 @@ inline void fetch_associated(T &t, int64_t id, db_reader<T> &reader, std::vector
 }
 
 template <>
-inline void fetch_associated<int>(int &, int64_t, db_reader<int> &, std::vector<int> &) {
+inline void fetch_associated<int>(int &, int64_t, int64_t, db_reader<int> &, std::vector<int> &) {
 }
 
 template <typename T>
-void extract_element(const std::string &dump_file, thread_writer<T> &writer) {
+inline bool is_redacted(const T &t) { return t.redaction_id; }
+
+template <> inline bool is_redacted<changeset>(const changeset &) { return false; }
+
+template <typename T>
+void extract_element(thread_writer<T> &writer) {
   typedef typename T::tag_type tag_type;
   typedef typename T::inner_type inner_type;
 
@@ -167,10 +178,10 @@ void extract_element(const std::string &dump_file, thread_writer<T> &writer) {
   while (element_reader(elements[i])) {
     // skip all redacted elements - they don't appear in the output
     // at all.
-    if (elements[i].redaction_id) { continue; }
+    if (is_redacted<T>(elements[i])) { continue; }
     
-    fetch_associated(current_inner, elements[i].id, inner_reader, inners);
-    fetch_associated(current_tag, elements[i].id, tag_reader, tags);
+    fetch_associated(current_inner, elements[i].id, version_of(elements[i]), inner_reader, inners);
+    fetch_associated(current_tag, elements[i].id, version_of(elements[i]), tag_reader, tags);
 
     ++i;
     if (i == BLOCK_SIZE) {
@@ -188,6 +199,9 @@ void extract_element(const std::string &dump_file, thread_writer<T> &writer) {
 
 template <typename T> void write_elements(output_writer &writer, control_block<T> &blk);
 
+template <> inline void write_elements<changeset>(output_writer &writer, control_block<changeset> &blk) { 
+  writer.changesets(blk.elements, blk.tags);
+}
 template <> inline void write_elements<node>(output_writer &writer, control_block<node> &blk) { 
   writer.nodes(blk.elements, blk.tags);
 }
@@ -232,7 +246,7 @@ void join_all_but(size_t i, std::vector<boost::shared_ptr<boost::thread> > &thre
 
 } // anonymous namespace
 
-void extract_users(const std::string &dump_file, std::map<int64_t, std::string> &display_name_map) {
+void extract_users(std::map<int64_t, std::string> &display_name_map) {
   db_reader<user> reader("users");
   user u;
   display_name_map.clear();
@@ -246,11 +260,10 @@ void extract_users(const std::string &dump_file, std::map<int64_t, std::string> 
 template <typename T>
 void reader_thread(int thread_index, 
                    boost::exception_ptr exc, 
-                   const std::string &dump_file, 
                    boost::shared_ptr<control_block<T> > blk) {
   try {
     thread_writer<T> writer(blk);
-    extract_element<T>(dump_file, writer);
+    extract_element<T>(writer);
 
   } catch (...) {
     exc = boost::current_exception();
@@ -262,8 +275,7 @@ void reader_thread(int thread_index,
 }
 
 template <typename T>
-void run_threads(const std::string &dump_file, 
-                 std::vector<boost::shared_ptr<output_writer> > writers) {
+void run_threads(std::vector<boost::shared_ptr<output_writer> > writers) {
   std::vector<boost::shared_ptr<boost::thread> > threads;
   std::vector<boost::exception_ptr> exceptions;
   const int num_threads = writers.size() + 1;
@@ -272,7 +284,7 @@ void run_threads(const std::string &dump_file,
   exceptions.resize(num_threads);
   boost::shared_ptr<control_block<T> > blk = boost::make_shared<control_block<T> >(writers.size() + 1);
 
-  threads.push_back(boost::make_shared<boost::thread>(boost::bind(&reader_thread<T>, i, exceptions[i], dump_file, blk)));
+  threads.push_back(boost::make_shared<boost::thread>(boost::bind(&reader_thread<T>, i, exceptions[i], blk)));
 
   BOOST_FOREACH(boost::shared_ptr<output_writer> writer, writers) {
     ++i;
@@ -303,6 +315,7 @@ void run_threads(const std::string &dump_file,
   }
 }
 
-template void run_threads<node>(const std::string &, std::vector<boost::shared_ptr<output_writer> >);
-template void run_threads<way>(const std::string &, std::vector<boost::shared_ptr<output_writer> >);
-template void run_threads<relation>(const std::string &, std::vector<boost::shared_ptr<output_writer> >);
+template void run_threads<node>(std::vector<boost::shared_ptr<output_writer> >);
+template void run_threads<way>(std::vector<boost::shared_ptr<output_writer> >);
+template void run_threads<relation>(std::vector<boost::shared_ptr<output_writer> >);
+template void run_threads<changeset>(std::vector<boost::shared_ptr<output_writer> >);

@@ -42,9 +42,30 @@ BOOST_FUSION_ADAPT_STRUCT(
   (bool, data_public)
   )
   
+struct current_tag {
+  static const int num_keys = 2;
+  static const std::vector<std::string> &column_names();
+
+  int64_t element_id;
+  std::string key, value;
+};
+
+BOOST_FUSION_ADAPT_STRUCT(
+  current_tag,
+  (int64_t, element_id)
+  (std::string, key)
+  (std::string, value)
+  )
+
 struct changeset {
   static const int num_keys = 1;
   static const std::vector<std::string> &column_names();
+  static const std::string table_name();
+  static const std::string tag_table_name();
+  static const std::string inner_table_name();
+
+  typedef current_tag tag_type;
+  typedef int inner_type;
 
   int64_t id;
   int32_t uid;
@@ -65,21 +86,6 @@ BOOST_FUSION_ADAPT_STRUCT(
   (boost::optional<int32_t>, max_lon)
   (boost::posix_time::ptime, closed_at)
   (int32_t, num_changes)
-  )
-
-struct current_tag {
-  static const int num_keys = 2;
-  static const std::vector<std::string> &column_names();
-
-  int64_t element_id;
-  std::string key, value;
-};
-
-BOOST_FUSION_ADAPT_STRUCT(
-  current_tag,
-  (int64_t, element_id)
-  (std::string, key)
-  (std::string, value)
   )
 
 struct old_tag {

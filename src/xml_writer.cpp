@@ -269,36 +269,48 @@ xml_writer::xml_writer(const std::string &file_name, const boost::program_option
 xml_writer::~xml_writer() {
 }
 
-/*
-void xml_writer::begin(const changeset &cs) {
-  m_impl->begin("changeset");
+void xml_writer::changesets(const std::vector<changeset> &css,
+                            const std::vector<current_tag> &ts) {
+  std::vector<current_tag>::const_iterator tag_itr = ts.begin();
 
-  m_impl->attribute("id", cs.id);
+  BOOST_FOREACH(const changeset &cs, css) {
+    m_impl->begin("changeset");
 
-  m_impl->attribute("created_at", cs.created_at);
-  // yuck - nasty hack, but then we don't explicitly store closed time in
-  // the database...
-  const bool open = cs.closed_at > m_impl->m_now;
-  if (!open) {
-    m_impl->attribute("closed_at", cs.closed_at);
-  }
-  m_impl->attribute("open", open);
+    m_impl->attribute("id", cs.id);
+    
+    m_impl->attribute("created_at", cs.created_at);
+    // yuck - nasty hack, but then we don't explicitly store closed time in
+    // the database...
+    const bool open = cs.closed_at > m_impl->m_now;
+    if (!open) {
+      m_impl->attribute("closed_at", cs.closed_at);
+    }
+    m_impl->attribute("open", open);
 
-  user_map_t::const_iterator user_itr = m_users.find(cs.uid);
-  if (user_itr != m_users.end()) {
-    m_impl->attribute("user", user_itr->second);
-    m_impl->attribute("uid", user_itr->first);
-    m_changesets.insert(std::make_pair(cs.id, user_itr->first));
-  }
+    user_map_t::const_iterator user_itr = m_users.find(cs.uid);
+    if (user_itr != m_users.end()) {
+      m_impl->attribute("user", user_itr->second);
+      m_impl->attribute("uid", user_itr->first);
+      m_changesets.insert(std::make_pair(cs.id, user_itr->first));
+    }
+    
+    if (cs.min_lat && cs.max_lat && cs.min_lon && cs.max_lon) {
+      m_impl->attribute("min_lat", double(cs.min_lat.get()) / SCALE);
+      m_impl->attribute("min_lon", double(cs.min_lon.get()) / SCALE);
+      m_impl->attribute("max_lat", double(cs.max_lat.get()) / SCALE);
+      m_impl->attribute("max_lon", double(cs.max_lon.get()) / SCALE);
+    }
 
-  if (cs.min_lat && cs.max_lat && cs.min_lon && cs.max_lon) {
-    m_impl->attribute("min_lat", double(cs.min_lat.get()) / SCALE);
-    m_impl->attribute("min_lon", double(cs.min_lon.get()) / SCALE);
-    m_impl->attribute("max_lat", double(cs.max_lat.get()) / SCALE);
-    m_impl->attribute("max_lon", double(cs.max_lon.get()) / SCALE);
+    while ((tag_itr != ts.end()) && (tag_itr->element_id <= cs.id)) {
+      if (tag_itr->element_id == cs.id) {
+        m_impl->add_tag(*tag_itr);
+      }
+      ++tag_itr;
+    }
+
+    m_impl->end();
   }
 }
-*/
 
 void xml_writer::nodes(const std::vector<node> &ns,
                        const std::vector<old_tag> &ts) {
@@ -325,8 +337,11 @@ void xml_writer::nodes(const std::vector<node> &ns,
       }
     }
 
-    while ((tag_itr != ts.end()) && (tag_itr->element_id <= n.id)) {
-      if (tag_itr->element_id == n.id) {
+    while ((tag_itr != ts.end()) && 
+           ((tag_itr->element_id < n.id) ||
+            ((tag_itr->element_id == n.id) &&
+             (tag_itr->version <= n.version)))) {
+      if ((tag_itr->element_id == n.id) && (tag_itr->version == n.version)) {
         m_impl->add_tag(*tag_itr);
       }
       ++tag_itr;
@@ -358,8 +373,11 @@ void xml_writer::ways(const std::vector<way> &ws,
       }
     }
 
-    while ((nd_itr != wns.end()) && (nd_itr->way_id <= w.id)) {
-      if (nd_itr->way_id == w.id) {
+    while ((nd_itr != wns.end()) && 
+           ((nd_itr->way_id < w.id) ||
+            ((nd_itr->way_id == w.id) &&
+             (nd_itr->version <= w.version)))) {
+      if ((nd_itr->way_id == w.id) && (nd_itr->version == w.version)) {
         m_impl->begin("nd");
         m_impl->attribute("ref", nd_itr->node_id);
         m_impl->end();
@@ -367,8 +385,11 @@ void xml_writer::ways(const std::vector<way> &ws,
       ++nd_itr;
     }
 
-    while ((tag_itr != ts.end()) && (tag_itr->element_id <= w.id)) {
-      if (tag_itr->element_id == w.id) {
+    while ((tag_itr != ts.end()) && 
+           ((tag_itr->element_id < w.id) ||
+            ((tag_itr->element_id == w.id) &&
+             (tag_itr->version <= w.version)))) {
+      if ((tag_itr->element_id == w.id) && (tag_itr->version == w.version)) {
         m_impl->add_tag(*tag_itr);
       }
       ++tag_itr;
@@ -400,8 +421,11 @@ void xml_writer::relations(const std::vector<relation> &rs,
       }
     }
 
-    while ((rm_itr != rms.end()) && (rm_itr->relation_id <= r.id)) {
-      if (rm_itr->relation_id == r.id) {
+    while ((rm_itr != rms.end()) && 
+           ((rm_itr->relation_id < r.id) ||
+            ((rm_itr->relation_id == r.id) &&
+             (rm_itr->version <= r.version)))) {
+      if ((rm_itr->relation_id == r.id) && (rm_itr->version == r.version)) {
         m_impl->begin("member");
         const char *type = 
           (rm_itr->member_id == nwr_node) ? "node" :
@@ -416,8 +440,11 @@ void xml_writer::relations(const std::vector<relation> &rs,
       ++rm_itr;
     }
 
-    while ((tag_itr != ts.end()) && (tag_itr->element_id <= r.id)) {
-      if (tag_itr->element_id == r.id) {
+    while ((tag_itr != ts.end()) && 
+           ((tag_itr->element_id < r.id) ||
+            ((tag_itr->element_id == r.id) &&
+             (tag_itr->version <= r.version)))) {
+      if ((tag_itr->element_id == r.id) && (tag_itr->version == r.version)) {
         m_impl->add_tag(*tag_itr);
       }
       ++tag_itr;

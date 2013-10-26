@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
     // of uid -> name where a missing uid indicates that the user doesn't have public
     // data.
     std::map<int64_t, std::string> display_name_map;
-    extract_users(dump_file, display_name_map);
+    extract_users(display_name_map);
 
     // build up a list of writers. these will be written to in parallel, which is
     // mildly wasteful if there's just one output type, but works great when all of
@@ -129,13 +129,13 @@ int main(int argc, char *argv[]) {
     }
 
     std::cerr << "Writing changesets..." << std::endl;
-    //extract_changesets(dump_file, writer);
+    run_threads<changeset>(writers);
     std::cerr << "Writing nodes..." << std::endl;
-    run_threads<node>(dump_file, writers);
+    run_threads<node>(writers);
     std::cerr << "Writing ways..." << std::endl;
-    run_threads<way>(dump_file, writers);
+    run_threads<way>(writers);
     std::cerr << "Writing relations..." << std::endl;
-    run_threads<relation>(dump_file, writers);
+    run_threads<relation>(writers);
 
     // tell writers to clean up - write finals, close files, that sort of thing
     BOOST_FOREACH(boost::shared_ptr<output_writer> writer, writers) {

@@ -56,20 +56,6 @@ struct string_table {
   int m_next_id;
 };
 
-template <typename T>
-void set_info(const T &t, OSMPBF::Info *info, bool history_format) {
-  static bt::ptime epoch = bt::from_time_t(time_t(0));
-
-  info->set_version(t.version);
-  info->set_timestamp((t.timestamp - epoch).total_seconds());
-  info->set_changeset(t.changeset_id);
-  // if we are doing a history file, and the default of visible=true
-  // doesn't apply, then we need to explicitly set visible=false.
-  if (history_format && !t.visible) {
-    info->set_visible(t.visible);
-  }
-}
-
 } // anonymous namespace
 
 struct pbf_writer::pimpl {
@@ -81,7 +67,8 @@ struct pbf_writer::pimpl {
     element_RELATION
   };
 
-  pimpl(const std::string &out_name, const bt::ptime &now, bool history_format) 
+  pimpl(const std::string &out_name, const bt::ptime &now, bool history_format,
+        const user_map_t &user_map) 
     : num_elements(0), buffer(), out(out_name.c_str()), str_table(),
       pblock(), pgroup(pblock.add_primitivegroup()), 
       current_node(NULL), current_way(NULL), current_relation(NULL),
@@ -90,7 +77,9 @@ struct pbf_writer::pimpl {
       m_last_way_node_ref(0),
       m_last_relation_member_ref(0),
       m_est_pblock_size(0),
-      m_history_format(history_format) {
+      m_history_format(history_format),
+      m_user_map(user_map),
+      m_changeset_user_map() {
     write_header_block(now);
   }
 
@@ -176,6 +165,29 @@ struct pbf_writer::pimpl {
     }
   }
 
+  template <typename T>
+  void set_info(const T &t, OSMPBF::Info *info) {
+    static bt::ptime epoch = bt::from_time_t(time_t(0));
+    
+    info->set_version(t.version);
+    info->set_timestamp((t.timestamp - epoch).total_seconds());
+    info->set_changeset(t.changeset_id);
+    // if we are doing a history file, and the default of visible=true
+    // doesn't apply, then we need to explicitly set visible=false.
+    if (m_history_format && !t.visible) {
+      info->set_visible(t.visible);
+    }
+    // set the uid and user information, if the user is public
+    std::map<int64_t, int64_t>::const_iterator itr = m_changeset_user_map.find(t.changeset_id);
+    if (itr != m_changeset_user_map.end()) {
+      user_map_t::const_iterator jtr = m_user_map.find(itr->second);
+      if (jtr != m_user_map.end()) {
+        info->set_uid(jtr->first);
+        info->set_user_sid(str_table(jtr->second));
+      }
+    }
+  }
+
   void add_changeset(const changeset &cs) {
     // looks like OSMPBF is broken and doesn't really support this.
     check_overflow(element_CHANGESET);
@@ -197,7 +209,7 @@ struct pbf_writer::pimpl {
       current_node->set_lat(0);
       current_node->set_lon(0);
     }
-    set_info(n, current_node->mutable_info(), m_history_format);
+    set_info(n, current_node->mutable_info());
 
     ++num_elements;
   }
@@ -207,7 +219,7 @@ struct pbf_writer::pimpl {
 
     current_way = pgroup->add_ways();
     current_way->set_id(w.id);
-    set_info(w, current_way->mutable_info(), m_history_format);
+    set_info(w, current_way->mutable_info());
 
     m_last_way_node_ref = 0;
     ++num_elements;
@@ -218,7 +230,7 @@ struct pbf_writer::pimpl {
 
     current_relation = pgroup->add_relations();
     current_relation->set_id(r.id);
-    set_info(r, current_relation->mutable_info(), m_history_format);
+    set_info(r, current_relation->mutable_info());
 
     m_last_relation_member_ref = 0;
     ++num_elements;
@@ -300,6 +312,8 @@ struct pbf_writer::pimpl {
   int64_t m_last_way_node_ref, m_last_relation_member_ref;
   int m_est_pblock_size;
   bool m_history_format;
+  user_map_t m_user_map;
+  std::map<int64_t, int64_t> m_changeset_user_map;
 
 private:
   // noncopyable
@@ -309,15 +323,18 @@ private:
 
 pbf_writer::pbf_writer(const std::string &file_name, const boost::program_options::variables_map &, 
                        const user_map_t &users, const boost::posix_time::ptime &now, bool history_format)
-  : m_impl(new pimpl(file_name, now, history_format)), m_users(users) {
+  : m_impl(new pimpl(file_name, now, history_format, users)) {
 }
 
 pbf_writer::~pbf_writer() {
 }
 
-// void pbf_writer::begin(const changeset &cs) {
-//   m_impl->add_changeset(cs);
-// }
+void pbf_writer::changesets(const std::vector<changeset> &cs, const std::vector<current_tag> &) {
+  std::map<int64_t, int64_t> &changeset_user_map = m_impl->m_changeset_user_map;
+  BOOST_FOREACH(const changeset &c, cs) {
+    changeset_user_map.insert(std::make_pair(c.id, c.uid));
+  }
+}
 
 void pbf_writer::nodes(const std::vector<node> &ns,
                        const std::vector<old_tag> &ts) {
@@ -326,8 +343,11 @@ void pbf_writer::nodes(const std::vector<node> &ns,
   BOOST_FOREACH(const node &n, ns) {
     m_impl->add_node(n);
     
-    while ((tag_itr != ts.end()) && (tag_itr->element_id <= n.id)) {
-      if (tag_itr->element_id == n.id) {
+    while ((tag_itr != ts.end()) && 
+           ((tag_itr->element_id < n.id) ||
+            ((tag_itr->element_id == n.id) &&
+             (tag_itr->version <= n.version)))) {
+      if ((tag_itr->element_id == n.id) && (tag_itr->version == n.version)) {
         m_impl->add_tag(*tag_itr);
       }
       ++tag_itr;
@@ -344,15 +364,21 @@ void pbf_writer::ways(const std::vector<way> &ws,
   BOOST_FOREACH(const way &w, ws) {
     m_impl->add_way(w);
 
-    while ((nd_itr != wns.end()) && (nd_itr->way_id <= w.id)) {
-      if (nd_itr->way_id == w.id) {
+    while ((nd_itr != wns.end()) && 
+           ((nd_itr->way_id < w.id) ||
+            ((nd_itr->way_id == w.id) &&
+             (nd_itr->version <= w.version)))) {
+      if ((nd_itr->way_id == w.id) && (nd_itr->version == w.version)) {
         m_impl->add_way_node(*nd_itr);
       }
       ++nd_itr;
     }
 
-    while ((tag_itr != ts.end()) && (tag_itr->element_id <= w.id)) {
-      if (tag_itr->element_id == w.id) {
+    while ((tag_itr != ts.end()) && 
+           ((tag_itr->element_id < w.id) ||
+            ((tag_itr->element_id == w.id) &&
+             (tag_itr->version <= w.version)))) {
+      if ((tag_itr->element_id == w.id) && (tag_itr->version == w.version)) {
         m_impl->add_tag(*tag_itr);
       }
       ++tag_itr;
@@ -369,15 +395,21 @@ void pbf_writer::relations(const std::vector<relation> &rs,
   BOOST_FOREACH(const relation &r, rs) {
     m_impl->add_relation(r);
 
-    while ((rm_itr != rms.end()) && (rm_itr->relation_id <= r.id)) {
-      if (rm_itr->relation_id == r.id) {
+    while ((rm_itr != rms.end()) && 
+           ((rm_itr->relation_id < r.id) ||
+            ((rm_itr->relation_id == r.id) &&
+             (rm_itr->version <= r.version)))) {
+      if ((rm_itr->relation_id == r.id) && (rm_itr->version == r.version)) {
         m_impl->add_relation_member(*rm_itr);
       }
       ++rm_itr;
     }
 
-    while ((tag_itr != ts.end()) && (tag_itr->element_id <= r.id)) {
-      if (tag_itr->element_id == r.id) {
+    while ((tag_itr != ts.end()) && 
+           ((tag_itr->element_id < r.id) ||
+            ((tag_itr->element_id == r.id) &&
+             (tag_itr->version <= r.version)))) {
+      if ((tag_itr->element_id == r.id) && (tag_itr->version == r.version)) {
         m_impl->add_tag(*tag_itr);
       }
       ++tag_itr;

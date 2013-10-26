@@ -11,11 +11,10 @@
 
 class pbf_writer : public output_writer {
 public:
-  typedef std::map<int64_t, int64_t> changeset_map_t;
-
   pbf_writer(const std::string &, const boost::program_options::variables_map &, const user_map_t &, const boost::posix_time::ptime &, bool = false);
   virtual ~pbf_writer();
 
+  void changesets(const std::vector<changeset> &, const std::vector<current_tag> &);
   void nodes(const std::vector<node> &, const std::vector<old_tag> &);
   void ways(const std::vector<way> &, const std::vector<way_node> &, const std::vector<old_tag> &);
   void relations(const std::vector<relation> &, const std::vector<relation_member> &, const std::vector<old_tag> &);
@@ -25,8 +24,6 @@ public:
 
 private:
   boost::scoped_ptr<pimpl> m_impl;
-  const user_map_t &m_users;
-  changeset_map_t m_changesets;
 };
 
 #endif /* PBF_WRITER_HPP */

@@ -16,6 +16,7 @@ public:
   xml_writer(const std::string &, const boost::program_options::variables_map &, const user_map_t &, const boost::posix_time::ptime &, bool = false);
   virtual ~xml_writer();
 
+  void changesets(const std::vector<changeset> &, const std::vector<current_tag> &);
   void nodes(const std::vector<node> &, const std::vector<old_tag> &);
   void ways(const std::vector<way> &, const std::vector<way_node> &, const std::vector<old_tag> &);
   void relations(const std::vector<relation> &, const std::vector<relation_member> &, const std::vector<old_tag> &);
