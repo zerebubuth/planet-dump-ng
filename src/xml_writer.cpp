@@ -307,8 +307,11 @@ void xml_writer::nodes(const std::vector<node> &ns,
   BOOST_FOREACH(const node &n, ns) {
     m_impl->begin("node");
     m_impl->attribute("id", n.id);
-    m_impl->attribute("lat", double(n.latitude) / SCALE);
-    m_impl->attribute("lon", double(n.longitude) / SCALE);
+    // deleted nodes don't have lat/lon attributes
+    if (n.visible) {
+      m_impl->attribute("lat", double(n.latitude) / SCALE);
+      m_impl->attribute("lon", double(n.longitude) / SCALE);
+    }
     m_impl->attribute("timestamp", n.timestamp);
     m_impl->attribute("version", n.version);
     m_impl->attribute("changeset", n.changeset_id);

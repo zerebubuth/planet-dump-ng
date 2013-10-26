@@ -57,12 +57,17 @@ struct string_table {
 };
 
 template <typename T>
-void set_info(const T &t, OSMPBF::Info *info) {
+void set_info(const T &t, OSMPBF::Info *info, bool history_format) {
   static bt::ptime epoch = bt::from_time_t(time_t(0));
 
   info->set_version(t.version);
   info->set_timestamp((t.timestamp - epoch).total_seconds());
   info->set_changeset(t.changeset_id);
+  // if we are doing a history file, and the default of visible=true
+  // doesn't apply, then we need to explicitly set visible=false.
+  if (history_format && !t.visible) {
+    info->set_visible(t.visible);
+  }
 }
 
 } // anonymous namespace
@@ -76,7 +81,7 @@ struct pbf_writer::pimpl {
     element_RELATION
   };
 
-  pimpl(const std::string &out_name, const bt::ptime &now) 
+  pimpl(const std::string &out_name, const bt::ptime &now, bool history_format) 
     : num_elements(0), buffer(), out(out_name.c_str()), str_table(),
       pblock(), pgroup(pblock.add_primitivegroup()), 
       current_node(NULL), current_way(NULL), current_relation(NULL),
@@ -84,7 +89,8 @@ struct pbf_writer::pimpl {
       m_current_element(element_NULL),
       m_last_way_node_ref(0),
       m_last_relation_member_ref(0),
-      m_est_pblock_size(0) {
+      m_est_pblock_size(0),
+      m_history_format(history_format) {
     write_header_block(now);
   }
 
@@ -102,6 +108,9 @@ struct pbf_writer::pimpl {
     bbox->set_bottom( -90L * lonlat_resolution);
 
     header.add_required_features("OsmSchema-V" OSM_VERSION_TEXT);
+    if (m_history_format) { 
+      header.add_required_features("HistoricalInformation");
+    }
     header.add_optional_features("Has_Metadata");
     header.add_optional_features("Sort.Type_then_ID");
     header.set_writingprogram(PACKAGE_STRING);
@@ -177,9 +186,18 @@ struct pbf_writer::pimpl {
 
     current_node = pgroup->add_nodes();
     current_node->set_id(n.id);
-    current_node->set_lat(n.latitude);
-    current_node->set_lon(n.longitude);
-    set_info(n, current_node->mutable_info());
+    // deleted nodes don't have lat/lon attributes
+    if (n.visible) {
+      current_node->set_lat(n.latitude);
+      current_node->set_lon(n.longitude);
+    } else {
+      // however, PBF doesn't allow you not to set these attributes,
+      // so we have to set them to some null value. (0, 0) is, sadly,
+      // the traditional value for these, even though it is valid.
+      current_node->set_lat(0);
+      current_node->set_lon(0);
+    }
+    set_info(n, current_node->mutable_info(), m_history_format);
 
     ++num_elements;
   }
@@ -189,7 +207,7 @@ struct pbf_writer::pimpl {
 
     current_way = pgroup->add_ways();
     current_way->set_id(w.id);
-    set_info(w, current_way->mutable_info());
+    set_info(w, current_way->mutable_info(), m_history_format);
 
     m_last_way_node_ref = 0;
     ++num_elements;
@@ -200,7 +218,7 @@ struct pbf_writer::pimpl {
 
     current_relation = pgroup->add_relations();
     current_relation->set_id(r.id);
-    set_info(r, current_relation->mutable_info());
+    set_info(r, current_relation->mutable_info(), m_history_format);
 
     m_last_relation_member_ref = 0;
     ++num_elements;
@@ -281,6 +299,7 @@ struct pbf_writer::pimpl {
   element_type m_current_element;
   int64_t m_last_way_node_ref, m_last_relation_member_ref;
   int m_est_pblock_size;
+  bool m_history_format;
 
 private:
   // noncopyable
@@ -290,7 +309,7 @@ private:
 
 pbf_writer::pbf_writer(const std::string &file_name, const boost::program_options::variables_map &, 
                        const user_map_t &users, const boost::posix_time::ptime &now, bool history_format)
-  : m_impl(new pimpl(file_name, now)), m_users(users) {
+  : m_impl(new pimpl(file_name, now, history_format)), m_users(users) {
 }
 
 pbf_writer::~pbf_writer() {
