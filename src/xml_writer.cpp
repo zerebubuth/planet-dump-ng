@@ -7,13 +7,44 @@
 
 #include <stdexcept>
 #include <boost/foreach.hpp>
+#include <boost/algorithm/string.hpp>
 
 #define SCALE (10000000)
 
 namespace pt = boost::posix_time;
 
+namespace {
+
+struct shell_escape_char {
+  template <typename ResultT>
+  std::string operator()(const ResultT &result) const {
+    std::string s;
+    for (typename ResultT::const_iterator itr = result.begin();
+         itr != result.end(); ++itr) {
+      s += '\\';
+      s += *itr;
+    }
+  }
+};
+
+std::string popen_command(const std::string &file_name, const std::string &compress_command) {
+  // need to shell escape the file name.
+  // NOTE: this seems to be incredibly ill-defined, and varies depending on the
+  // system shell. a better way would be to open the file directly and dup
+  // the file descriptor, but that seems to be quite a pain in the arse.
+  
+  std::string escaped_file_name(file_name);
+  boost::find_format_all(escaped_file_name, boost::token_finder(boost::is_any_of("\\\"")), shell_escape_char());
+  std::ostringstream command;
+  command << compress_command << " > \"" << escaped_file_name << "\"";
+
+  return command.str();
+}
+
+} // anonymous namespace
+
 struct xml_writer::pimpl {
-  pimpl(std::ostream &out, const pt::ptime &now);
+  pimpl(const std::string &file_name, const std::string &compress_command, const pt::ptime &now);
   ~pimpl();
 
   void begin(const char *name);
@@ -29,7 +60,11 @@ struct xml_writer::pimpl {
   void add_tag(const current_tag &t);
   void add_tag(const old_tag &t);
 
-  std::ostream &m_out;
+  // flush & close output stream
+  void finish();
+
+  std::string m_command;
+  FILE *m_out;
   xmlTextWriterPtr m_writer;
   pt::ptime m_now;
 };
@@ -40,9 +75,17 @@ static int wrap_write(void *context, const char *buffer, int len) {
   if (impl == NULL) {
     throw std::runtime_error("State object NULL in wrap_write.");
   }
+  if (impl->m_out == NULL) {
+    throw std::runtime_error("Output pipe NULL in wrap_write.");
+  }
 
-  impl->m_out.write(buffer, len);
-  if (impl->m_out.fail()) {
+  if (len < 0) {
+    throw std::runtime_error("Negative length in wrap_write.");
+  }
+  const size_t slen = len;
+
+  const size_t status = fwrite(buffer, 1, slen, impl->m_out);
+  if (status < slen) {
     throw std::runtime_error("Failed to write to output stream.");
   }
   return len;
@@ -52,15 +95,28 @@ static int wrap_close(void *context) {
   xml_writer::pimpl *impl = static_cast<xml_writer::pimpl *>(context);
 
   if (impl == NULL) {
-    throw std::runtime_error("State object NULL in wrap_write.");
+    throw std::runtime_error("State object NULL in wrap_close.");
+  }
+  if (impl->m_out == NULL) {
+    throw std::runtime_error("Output pipe NULL in wrap_close.");
   }
 
-  // NOTE: can't close std::ostream directly?
+  int status = pclose(impl->m_out);
+  if (status == -1) {
+    throw std::runtime_error("Output pipe could not be closed in wrap_close.");
+  }
+  impl->m_out = NULL;
+
   return 0;
 }
 
-xml_writer::pimpl::pimpl(std::ostream &out, const pt::ptime &now) 
-  : m_out(out), m_writer(NULL), m_now(now) {
+xml_writer::pimpl::pimpl(const std::string &file_name, const std::string &compress_command, const pt::ptime &now) 
+  : m_command(popen_command(file_name, compress_command)), 
+    m_out(popen(m_command.c_str(), "w")), m_writer(NULL), m_now(now) {
+
+  if (m_out == NULL) {
+    throw std::runtime_error("Unable to popen compression command for output.");
+  }
 
   xmlOutputBufferPtr output_buffer =
     xmlOutputBufferCreateIO(wrap_write, wrap_close, this, NULL);
@@ -79,11 +135,21 @@ xml_writer::pimpl::pimpl(std::ostream &out, const pt::ptime &now)
 }
 
 xml_writer::pimpl::~pimpl() {
+}
+
+void xml_writer::pimpl::finish() {
   try {
     xmlTextWriterEndDocument(m_writer);
   } catch (...) {
   }
   xmlFreeTextWriter(m_writer);
+
+  if (m_out != NULL) {
+    // note that this *should* have already happened in xmlTextWriterEndDocument
+    // but this is just to be on the safe side and not leave any processes
+    // lying around.
+    pclose(m_out);
+  }
 }
 
 void xml_writer::pimpl::begin(const char *name) {
@@ -170,9 +236,9 @@ void xml_writer::pimpl::add_tag(const old_tag &t) {
   end();
 }
 
-xml_writer::xml_writer(std::ostream &out, const user_map_t &users,
-                       const pt::ptime &max_time)
-  : m_impl(new pimpl(out, max_time)),
+xml_writer::xml_writer(const std::string &option_name, const boost::program_options::variables_map &options,
+                       const user_map_t &users, const pt::ptime &max_time, bool has_history)
+  : m_impl(new pimpl(options[option_name].as<std::string>(), options["compress-command"].as<std::string>(), max_time)),
     m_users(users) {
   m_impl->begin("osm");
   m_impl->attribute("license",     OSM_LICENSE_TEXT);
@@ -189,7 +255,6 @@ xml_writer::xml_writer(std::ostream &out, const user_map_t &users,
 }
 
 xml_writer::~xml_writer() {
-  m_impl->end(); // </osm>
 }
 
 /*
@@ -347,3 +412,7 @@ void xml_writer::relations(const std::vector<relation> &rs,
   }
 }
 
+void xml_writer::finish() {
+  m_impl->end(); // </osm>
+  m_impl->finish();
+}

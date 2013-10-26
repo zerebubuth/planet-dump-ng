@@ -3,6 +3,8 @@
 #include "output_writer.hpp"
 #include "xml_writer.hpp"
 #include "pbf_writer.hpp"
+#include "history_filter.hpp"
+#include "config.h"
 
 #include <boost/shared_ptr.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -15,47 +17,116 @@
 #include <stdexcept>
 
 namespace bt = boost::posix_time;
+namespace po = boost::program_options;
+
+/**
+ * get command line options, handle --help and usage, validate options.
+ */
+static void get_options(int argc, char **argv, po::variables_map &vm) {
+  po::options_description desc(PACKAGE_STRING ": Allowed options");
+
+  desc.add_options()
+    ("help,h", "display help text and exit")
+    ("compress-command,c", po::value<std::string>()->default_value("bzip2 -c"),
+     "program used to compress XML output, must read from stdin and write to stdout")
+    ("xml,x", po::value<std::string>(), "planet XML output file (without history)")
+    ("history-xml,X", po::value<std::string>(), "history XML output file")
+    ("pbf,p", po::value<std::string>(), "planet PBF output file (without history)")
+    ("history-pbf,P", po::value<std::string>(), "history PBF output file")
+    ("dump-file,f", po::value<std::string>(), "PostgreSQL table dump to read")
+    ;
+
+  po::store(po::parse_command_line(argc, argv, desc), vm);
+  po::notify(vm);
+
+  if (vm.count("help")) {
+    std::cout << desc << std::endl;
+    exit(0);
+  }
+
+  if (vm.count("dump-file") == 0) {
+    throw std::runtime_error("A PostgreSQL table dump file (--dump-file) must be provided.");
+  }
+
+  if ((vm.count("xml") + vm.count("history-xml") +
+       vm.count("pbf") + vm.count("history-pbf")) == 0) {
+    throw std::runtime_error("No output file provided! You must provide one or more of "
+                             "--xml, --history-xml, --pbf or --history-pbf to get output.");
+  }
+}
+
+/**
+ * read the dump file in parallel to get all of the elements into leveldb
+ * databases. this is primarily so tha the data is sorted, which is not
+ * guaranteed in the PostgreSQL dump file. returns the maximum time seen
+ * in a timestamp of any element in the dump file.
+ */
+bt::ptime setup_leveldb_databases(const std::string &dump_file) {
+  std::list<boost::shared_ptr<base_thread> > threads;
+  
+  threads.push_back(boost::make_shared<run_thread<changeset> >("changesets", dump_file));
+  threads.push_back(boost::make_shared<run_thread<node> >("nodes", dump_file));
+  threads.push_back(boost::make_shared<run_thread<way> >("ways", dump_file));
+  threads.push_back(boost::make_shared<run_thread<relation> >("relations", dump_file));
+  
+  threads.push_back(boost::make_shared<run_thread<current_tag> >("changeset_tags", dump_file));
+  threads.push_back(boost::make_shared<run_thread<old_tag> >("node_tags", dump_file));
+  threads.push_back(boost::make_shared<run_thread<old_tag> >("way_tags", dump_file));
+  threads.push_back(boost::make_shared<run_thread<old_tag> >("relation_tags", dump_file));
+  threads.push_back(boost::make_shared<run_thread<way_node> >("way_nodes", dump_file));
+  threads.push_back(boost::make_shared<run_thread<relation_member> >("relation_members", dump_file));
+  
+  threads.push_back(boost::make_shared<run_thread<user> >("users", dump_file));
+  
+  bt::ptime max_time(bt::neg_infin);
+  BOOST_FOREACH(boost::shared_ptr<base_thread> &thr, threads) {
+    max_time = std::max(max_time, thr->join());
+    thr.reset();
+  }
+  threads.clear();
+
+  return max_time;
+}
 
 int main(int argc, char *argv[]) {
   try {
-    if (argc != 3) {
-       throw std::runtime_error("Usage: ./planet-dump <file> <pbf-file>");
-    }
+    po::variables_map options;
+    get_options(argc, argv, options);
 
     // workaround for https://svn.boost.org/trac/boost/ticket/5638
     boost::gregorian::greg_month::get_month_map_ptr();
 
-    std::string dump_file(argv[1]);
+    // extract data from the dump file for the "sorted" data tables, like nodes,
+    // ways, relations, changesets and their associated tags, etc...
+    const std::string dump_file(options["dump-file"].as<std::string>());
+    const bt::ptime max_time = setup_leveldb_databases(dump_file);
+
+    // users aren't dumped directly to the files. we only use them to build up a map
+    // of uid -> name where a missing uid indicates that the user doesn't have public
+    // data.
     std::map<int64_t, std::string> display_name_map;
-
-    std::list<boost::shared_ptr<base_thread> > threads;
-
-    threads.push_back(boost::make_shared<run_thread<changeset> >("changesets", dump_file));
-    threads.push_back(boost::make_shared<run_thread<node> >("nodes", dump_file));
-    threads.push_back(boost::make_shared<run_thread<way> >("ways", dump_file));
-    threads.push_back(boost::make_shared<run_thread<relation> >("relations", dump_file));
-
-    threads.push_back(boost::make_shared<run_thread<current_tag> >("changeset_tags", dump_file));
-    threads.push_back(boost::make_shared<run_thread<old_tag> >("node_tags", dump_file));
-    threads.push_back(boost::make_shared<run_thread<old_tag> >("way_tags", dump_file));
-    threads.push_back(boost::make_shared<run_thread<old_tag> >("relation_tags", dump_file));
-    threads.push_back(boost::make_shared<run_thread<way_node> >("way_nodes", dump_file));
-    threads.push_back(boost::make_shared<run_thread<relation_member> >("relation_members", dump_file));
-
-    threads.push_back(boost::make_shared<run_thread<user> >("users", dump_file));
-
-    bt::ptime max_time(bt::neg_infin);
-    BOOST_FOREACH(boost::shared_ptr<base_thread> &thr, threads) {
-      max_time = std::max(max_time, thr->join());
-      thr.reset();
-    }
-    threads.clear();
-
     extract_users(dump_file, display_name_map);
-    std::ofstream pbf_out(argv[2]);
+
+    // build up a list of writers. these will be written to in parallel, which is
+    // mildly wasteful if there's just one output type, but works great when all of
+    // the output types are being used.
     std::vector<boost::shared_ptr<output_writer> > writers;
-    writers.push_back(boost::shared_ptr<output_writer>(new pbf_writer(pbf_out, display_name_map, max_time)));
-    writers.push_back(boost::shared_ptr<output_writer>(new xml_writer(std::cout, display_name_map, max_time)));
+    if (options.count("history-xml")) {
+      std::string output_file = options["history-xml"].as<std::string>();
+      writers.push_back(boost::shared_ptr<output_writer>(new history_filter<xml_writer>(output_file, options, display_name_map, max_time)));
+    }
+    if (options.count("history-pbf")) {
+      std::string output_file = options["history-pbf"].as<std::string>();
+      writers.push_back(boost::shared_ptr<output_writer>(new history_filter<pbf_writer>(output_file, options, display_name_map, max_time)));
+    }
+    if (options.count("xml")) {
+      std::string output_file = options["xml"].as<std::string>();
+      writers.push_back(boost::shared_ptr<output_writer>(new xml_writer(output_file, options, display_name_map, max_time)));
+    }
+    if (options.count("pbf")) {
+      std::string output_file = options["pbf"].as<std::string>();
+      writers.push_back(boost::shared_ptr<output_writer>(new pbf_writer(output_file, options, display_name_map, max_time)));
+    }
 
     std::cerr << "Writing changesets..." << std::endl;
     //extract_changesets(dump_file, writer);

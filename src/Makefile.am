@@ -9,6 +9,7 @@ ___planet_dump_ng_SOURCES=\
 	dump_archive.cpp \
 	dump_reader.cpp \
 	extract_kv.cpp \
+	history_filter.cpp \
 	insert_kv.cpp \
 	output_writer.cpp \
 	pbf_writer.cpp \

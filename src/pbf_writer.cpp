@@ -11,6 +11,7 @@
 
 #include <zlib.h>
 #include <arpa/inet.h>
+#include <fstream>
 
 namespace bt = boost::posix_time;
 
@@ -75,8 +76,8 @@ struct pbf_writer::pimpl {
     element_RELATION
   };
 
-  pimpl(std::ostream &out_, const bt::ptime &now) 
-    : num_elements(0), buffer(), out(out_), str_table(),
+  pimpl(const std::string &out_name, const bt::ptime &now) 
+    : num_elements(0), buffer(), out(out_name.c_str()), str_table(),
       pblock(), pgroup(pblock.add_primitivegroup()), 
       current_node(NULL), current_way(NULL), current_relation(NULL),
       m_byte_limit(size_t(0.25 * OSMPBF::max_uncompressed_blob_size)),
@@ -87,10 +88,6 @@ struct pbf_writer::pimpl {
   }
 
   ~pimpl() {
-    // flush out last remaining elements
-    check_overflow(element_NULL);
-    // and make sure it's all written out
-    out.flush();
   }
 
   void write_header_block(const bt::ptime &now) {
@@ -263,9 +260,18 @@ struct pbf_writer::pimpl {
     m_last_relation_member_ref = rm.member_id;
   }
   
+  void finish() {
+    // flush out last remaining elements
+    check_overflow(element_NULL);
+    // and make sure it's all written out
+    out.flush();
+    // and finally close the file
+    out.close();
+  }
+
   size_t num_elements;
   std::ostringstream buffer;
-  std::ostream &out;
+  std::ofstream out;
   string_table str_table;
   OSMPBF::PrimitiveBlock pblock;
   OSMPBF::PrimitiveGroup *pgroup;
@@ -275,11 +281,16 @@ struct pbf_writer::pimpl {
   const size_t m_byte_limit;
   element_type m_current_element;
   int64_t m_last_way_node_ref, m_last_relation_member_ref;
+
+private:
+  // noncopyable
+  pimpl(const pimpl &);
+  const pimpl &operator=(const pimpl &);
 };
 
-pbf_writer::pbf_writer(std::ostream &out, const user_map_t &users, 
-                       const bt::ptime &now)
-  : m_impl(new pimpl(out, now)), m_users(users) {
+pbf_writer::pbf_writer(const std::string &option_name, const boost::program_options::variables_map &options, 
+                       const user_map_t &users, const boost::posix_time::ptime &now, bool history_format)
+  : m_impl(new pimpl(options[option_name].as<std::string>(), now)), m_users(users) {
 }
 
 pbf_writer::~pbf_writer() {
@@ -353,4 +364,8 @@ void pbf_writer::relations(const std::vector<relation> &rs,
       ++tag_itr;
     }
   }
+}
+
+void pbf_writer::finish() {
+  m_impl->finish();
 }
