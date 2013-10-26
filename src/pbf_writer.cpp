@@ -104,7 +104,9 @@ struct pbf_writer::pimpl {
     header.add_optional_features("Sort.Type_then_ID");
     header.set_writingprogram(PACKAGE_STRING);
     header.set_source(OSM_API_ORIGIN);
+#ifndef WITH_OLD_OSMPBF
     header.set_osmosis_replication_timestamp((now - bt::from_time_t(time_t(0))).total_seconds());
+#endif
 
     write_blob(header, "OSMHeader");
   }
