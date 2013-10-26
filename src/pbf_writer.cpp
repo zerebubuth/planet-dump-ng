@@ -83,7 +83,8 @@ struct pbf_writer::pimpl {
       m_byte_limit(int(0.25 * OSMPBF::max_uncompressed_blob_size)),
       m_current_element(element_NULL),
       m_last_way_node_ref(0),
-      m_last_relation_member_ref(0) {
+      m_last_relation_member_ref(0),
+      m_est_pblock_size(0) {
     write_header_block(now);
   }
 
@@ -145,14 +146,9 @@ struct pbf_writer::pimpl {
       m_current_element = type;
     }
 
-    // std::cerr << "current_element: " << m_current_element
-    //           << ", type: " << type
-    //           << ", num_elements: " << num_elements
-    //           << ", bytesize(): " << pblock.ByteSize()
-    //           << ", limit: " << m_byte_limit
-    //           << std::endl;
     if ((m_current_element != type) || (num_elements >= 16000)) {
-      bool new_block = (m_current_element != type) || (pblock.ByteSize() >= m_byte_limit);
+      m_est_pblock_size += pgroup->ByteSize();
+      bool new_block = (m_current_element != type) || (m_est_pblock_size >= m_byte_limit);
       if (new_block) {
         str_table.write(pblock.mutable_stringtable());
         write_blob(pblock, "OSMData");
@@ -160,6 +156,7 @@ struct pbf_writer::pimpl {
         str_table.clear();
         
         m_current_element = type;
+        m_est_pblock_size = 0;
       }
 
       pgroup = pblock.add_primitivegroup();
@@ -283,6 +280,7 @@ struct pbf_writer::pimpl {
   const int m_byte_limit;
   element_type m_current_element;
   int64_t m_last_way_node_ref, m_last_relation_member_ref;
+  int m_est_pblock_size;
 
 private:
   // noncopyable
