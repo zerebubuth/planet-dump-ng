@@ -7,7 +7,9 @@
 
 #include <stdexcept>
 #include <boost/foreach.hpp>
+#include <boost/format.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/exception/all.hpp>
 
 #define SCALE (10000000)
 
@@ -24,27 +26,37 @@ struct shell_escape_char {
       s += '\\';
       s += *itr;
     }
+    return s;
   }
 };
 
-std::string popen_command(const std::string &file_name, const std::string &compress_command) {
+std::string popen_command(const std::string &file_name, const boost::program_options::variables_map &options) {
+  std::string compress_command;
+  try {
+    compress_command = options["compress-command"].as<std::string>();
+  } catch (...) {
+    boost::throw_exception(
+      boost::enable_error_info(
+        std::runtime_error((boost::format("Unable to get options for \"%1%\".") % file_name).str()))
+      << boost::errinfo_nested_exception(boost::current_exception()));
+  }
+
   // need to shell escape the file name.
   // NOTE: this seems to be incredibly ill-defined, and varies depending on the
   // system shell. a better way would be to open the file directly and dup
   // the file descriptor, but that seems to be quite a pain in the arse.
-  
   std::string escaped_file_name(file_name);
   boost::find_format_all(escaped_file_name, boost::token_finder(boost::is_any_of("\\\"")), shell_escape_char());
+
   std::ostringstream command;
   command << compress_command << " > \"" << escaped_file_name << "\"";
-
   return command.str();
 }
 
 } // anonymous namespace
 
 struct xml_writer::pimpl {
-  pimpl(const std::string &file_name, const std::string &compress_command, const pt::ptime &now);
+  pimpl(const std::string &file_name, const boost::program_options::variables_map &options, const pt::ptime &now);
   ~pimpl();
 
   void begin(const char *name);
@@ -110,8 +122,8 @@ static int wrap_close(void *context) {
   return 0;
 }
 
-xml_writer::pimpl::pimpl(const std::string &file_name, const std::string &compress_command, const pt::ptime &now) 
-  : m_command(popen_command(file_name, compress_command)), 
+xml_writer::pimpl::pimpl(const std::string &file_name, const boost::program_options::variables_map &options, const pt::ptime &now) 
+  : m_command(popen_command(file_name, options)), 
     m_out(popen(m_command.c_str(), "w")), m_writer(NULL), m_now(now) {
 
   if (m_out == NULL) {
@@ -236,9 +248,9 @@ void xml_writer::pimpl::add_tag(const old_tag &t) {
   end();
 }
 
-xml_writer::xml_writer(const std::string &option_name, const boost::program_options::variables_map &options,
+xml_writer::xml_writer(const std::string &file_name, const boost::program_options::variables_map &options,
                        const user_map_t &users, const pt::ptime &max_time, bool has_history)
-  : m_impl(new pimpl(options[option_name].as<std::string>(), options["compress-command"].as<std::string>(), max_time)),
+  : m_impl(new pimpl(file_name, options, max_time)),
     m_users(users) {
   m_impl->begin("osm");
   m_impl->attribute("license",     OSM_LICENSE_TEXT);

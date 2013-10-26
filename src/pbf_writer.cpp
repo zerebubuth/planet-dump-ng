@@ -80,7 +80,7 @@ struct pbf_writer::pimpl {
     : num_elements(0), buffer(), out(out_name.c_str()), str_table(),
       pblock(), pgroup(pblock.add_primitivegroup()), 
       current_node(NULL), current_way(NULL), current_relation(NULL),
-      m_byte_limit(size_t(0.25 * OSMPBF::max_uncompressed_blob_size)),
+      m_byte_limit(int(0.25 * OSMPBF::max_uncompressed_blob_size)),
       m_current_element(element_NULL),
       m_last_way_node_ref(0),
       m_last_relation_member_ref(0) {
@@ -250,6 +250,8 @@ struct pbf_writer::pimpl {
     case nwr_relation:
       return OSMPBF::Relation::RELATION;
     }
+
+    throw std::runtime_error("Unknown nwr_enum value in member_type.");
   }
 
   void add_relation_member(const relation_member &rm) {
@@ -278,7 +280,7 @@ struct pbf_writer::pimpl {
   OSMPBF::Node *current_node;
   OSMPBF::Way *current_way;
   OSMPBF::Relation *current_relation;
-  const size_t m_byte_limit;
+  const int m_byte_limit;
   element_type m_current_element;
   int64_t m_last_way_node_ref, m_last_relation_member_ref;
 
@@ -288,9 +290,9 @@ private:
   const pimpl &operator=(const pimpl &);
 };
 
-pbf_writer::pbf_writer(const std::string &option_name, const boost::program_options::variables_map &options, 
+pbf_writer::pbf_writer(const std::string &file_name, const boost::program_options::variables_map &, 
                        const user_map_t &users, const boost::posix_time::ptime &now, bool history_format)
-  : m_impl(new pimpl(options[option_name].as<std::string>(), now)), m_users(users) {
+  : m_impl(new pimpl(file_name, now)), m_users(users) {
 }
 
 pbf_writer::~pbf_writer() {
