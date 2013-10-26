@@ -113,19 +113,19 @@ int main(int argc, char *argv[]) {
     std::vector<boost::shared_ptr<output_writer> > writers;
     if (options.count("history-xml")) {
       std::string output_file = options["history-xml"].as<std::string>();
-      writers.push_back(boost::shared_ptr<output_writer>(new history_filter<xml_writer>(output_file, options, display_name_map, max_time)));
+      writers.push_back(boost::shared_ptr<output_writer>(new xml_writer(output_file, options, display_name_map, max_time)));
     }
     if (options.count("history-pbf")) {
       std::string output_file = options["history-pbf"].as<std::string>();
-      writers.push_back(boost::shared_ptr<output_writer>(new history_filter<pbf_writer>(output_file, options, display_name_map, max_time)));
+      writers.push_back(boost::shared_ptr<output_writer>(new pbf_writer(output_file, options, display_name_map, max_time)));
     }
     if (options.count("xml")) {
       std::string output_file = options["xml"].as<std::string>();
-      writers.push_back(boost::shared_ptr<output_writer>(new xml_writer(output_file, options, display_name_map, max_time)));
+      writers.push_back(boost::shared_ptr<output_writer>(new history_filter<xml_writer>(output_file, options, display_name_map, max_time)));
     }
     if (options.count("pbf")) {
       std::string output_file = options["pbf"].as<std::string>();
-      writers.push_back(boost::shared_ptr<output_writer>(new pbf_writer(output_file, options, display_name_map, max_time)));
+      writers.push_back(boost::shared_ptr<output_writer>(new history_filter<pbf_writer>(output_file, options, display_name_map, max_time)));
     }
 
     std::cerr << "Writing changesets..." << std::endl;
@@ -136,6 +136,11 @@ int main(int argc, char *argv[]) {
     run_threads<way>(dump_file, writers);
     std::cerr << "Writing relations..." << std::endl;
     run_threads<relation>(dump_file, writers);
+
+    // tell writers to clean up - write finals, close files, that sort of thing
+    BOOST_FOREACH(boost::shared_ptr<output_writer> writer, writers) {
+      writer->finish();
+    }
     std::cerr << "Done" << std::endl;
 
   } catch (const boost::exception &e) {
