@@ -28,8 +28,8 @@ To install these on Ubuntu, you can just type:
     sudo apt-get install build-essential automake autoconf \
       libxml2-dev libboost-dev libboost-program-options-dev \
 	  libboost-date-time-dev libboost-filesystem-dev \
-	  libosmpbf-dev osmpbf-bin libleveldb-dev libprotobuf-dev \
-	  pkg-config
+	  libboost-thread-dev libosmpbf-dev osmpbf-bin \
+	  libleveldb-dev libprotobuf-dev pkg-config
 
 After that, it should just be a matter of running:
 
