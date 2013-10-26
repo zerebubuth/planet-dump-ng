@@ -50,8 +50,8 @@ AC_SUBST([PROTOBUF_LIBS])
 AC_CHECK_HEADER([osmpbf/osmpbf.h],[],[AC_MSG_ERROR([Unable to find the osmpbf headers, you might need to install libosmpbf-dev.])])
 
 AC_MSG_CHECKING([whether you have an ancient version of osmpbf.])
-AC_ARG_ENABLE([old_osmpbf],
-	[AS_HELP_STRING([--with-ancient-osmpbf],
+AC_ARG_ENABLE([old-osmpbf],
+	[AS_HELP_STRING([--enable-old-osmpbf],
                 [Use this flag if you have a version of libosmpbf-dev before 1.3.0.])],
         [with_old_osmpbf="yes"],
         [with_old_osmpbf="no"])
