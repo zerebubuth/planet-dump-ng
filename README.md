@@ -25,16 +25,16 @@ Before building the code, you will need:
 
 To install these on Ubuntu, you can just type:
 
-  sudo apt-get install build-essential automake autoconf \
-    libxml2-dev libboost-dev libboost-program-options-dev \
-	libboost-date-time-dev libboost-filesystem-dev \
-	libosmpbf-dev osmpbf-bin libleveldb-dev libprotobuf-dev
+    sudo apt-get install build-essential automake autoconf \
+      libxml2-dev libboost-dev libboost-program-options-dev \
+	  libboost-date-time-dev libboost-filesystem-dev \
+	  libosmpbf-dev osmpbf-bin libleveldb-dev libprotobuf-dev
 
 After that, it should just be a matter of running:
 
-  ./autogen.sh
-  ./configure --with-leveldb=/usr
-  make
+    ./autogen.sh
+    ./configure --with-leveldb=/usr
+    make
   
 If you run into any issues with this, please file a bug on the github
 issues page for this project, giving as much detail as you can about
@@ -46,7 +46,7 @@ Running
 The planet dump program has a decent built-in usage description, which
 you can read by running:
 
-  planet-dump-ng --help
+    planet-dump-ng --help
 
 One thing to note is that the program will create LevelDB databases in
 the current working directory, so it is wise to run the program
