@@ -138,15 +138,19 @@ struct unapp_item {
 };
 
 template <typename T>
-void from_binary(const leveldb::Slice &s, T &t) {
+void from_binary(const slice_t &s, T &t) {
+#ifdef HAVE_LEVELDB
   std::istringstream in(s.ToString());
+#else /* HAVE_LEVELDB */
+  std::istringstream in(s);
+#endif /* HAVE_LEVELDB */
   bf::fold(t, 0, unapp_item(in));
 }
 
 } // anonymous namespace
 
 template <typename T>
-void insert_kv(T &t, const leveldb::Slice &key, const leveldb::Slice &val) {
+void insert_kv(T &t, const slice_t &key, const slice_t &val) {
   static const int num_keys = T::num_keys;
   typedef typename bf::result_of::begin<T>::type it_begin;
   typedef typename bf::result_of::end<T>::type it_end;
@@ -163,12 +167,12 @@ void insert_kv(T &t, const leveldb::Slice &key, const leveldb::Slice &val) {
   from_binary(val, val_range);
 }
 
-template void insert_kv<user>(user &, const leveldb::Slice &, const leveldb::Slice &);
-template void insert_kv<changeset>(changeset &, const leveldb::Slice &, const leveldb::Slice &);
-template void insert_kv<current_tag>(current_tag &, const leveldb::Slice &, const leveldb::Slice &);
-template void insert_kv<old_tag>(old_tag &, const leveldb::Slice &, const leveldb::Slice &);
-template void insert_kv<node>(node &, const leveldb::Slice &, const leveldb::Slice &);
-template void insert_kv<way>(way &, const leveldb::Slice &, const leveldb::Slice &);
-template void insert_kv<way_node>(way_node &, const leveldb::Slice &, const leveldb::Slice &);
-template void insert_kv<relation>(relation &, const leveldb::Slice &, const leveldb::Slice &);
-template void insert_kv<relation_member>(relation_member &, const leveldb::Slice &, const leveldb::Slice &);
+template void insert_kv<user>(user &, const slice_t &, const slice_t &);
+template void insert_kv<changeset>(changeset &, const slice_t &, const slice_t &);
+template void insert_kv<current_tag>(current_tag &, const slice_t &, const slice_t &);
+template void insert_kv<old_tag>(old_tag &, const slice_t &, const slice_t &);
+template void insert_kv<node>(node &, const slice_t &, const slice_t &);
+template void insert_kv<way>(way &, const slice_t &, const slice_t &);
+template void insert_kv<way_node>(way_node &, const slice_t &, const slice_t &);
+template void insert_kv<relation>(relation &, const slice_t &, const slice_t &);
+template void insert_kv<relation_member>(relation_member &, const slice_t &, const slice_t &);

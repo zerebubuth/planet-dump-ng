@@ -1,6 +1,7 @@
 #include "copy_elements.hpp"
 #include "insert_kv.hpp"
 #include "types.hpp"
+#include "config.h"
 
 #include <string>
 #include <stdexcept>
@@ -17,8 +18,10 @@
 #include <boost/make_shared.hpp>
 #include <boost/foreach.hpp>
 
+#ifdef HAVE_LEVELDB
 #include <leveldb/db.h>
 #include <leveldb/options.h>
+#endif /* HAVE_LEVELDB */
 
 namespace {
 
@@ -62,6 +65,8 @@ struct thread_writer {
   }
 };
 
+#ifdef HAVE_LEVELDB
+// leveldb implementation of db_reader
 template <typename T>
 struct db_reader {
   db_reader(const std::string &name) : m_db(NULL), m_itr(NULL) {
@@ -97,12 +102,29 @@ struct db_reader {
     }
     return valid;
   }
-  
+
   leveldb::DB *m_db;
   leveldb::Iterator *m_itr;
   leveldb::Options m_options;
   leveldb::ReadOptions m_read_options;
 };
+#else /* HAVE_LEVELDB */
+template <typename T>
+struct db_reader {
+  db_reader(const std::string &) {
+    // TODO MERGESORT
+  }
+
+  ~db_reader() {
+    // TODO MERGESORT
+  }
+
+  bool operator()(T &t) {
+    // TODO MERGESORT
+    return false;
+  }
+};
+#endif /* HAVE_LEVELDB */
 
 template <>
 struct db_reader<int> {

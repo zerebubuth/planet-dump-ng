@@ -1,4 +1,5 @@
 #include "dump_reader.hpp"
+#include "config.h"
 
 #include <cstdio>
 #include <boost/algorithm/string.hpp>
@@ -7,9 +8,11 @@
 #include <boost/noncopyable.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
+#ifdef HAVE_LEVELDB
 #include <leveldb/db.h>
 #include <leveldb/options.h>
 #include <leveldb/write_batch.h>
+#endif /* HAVE_LEVELDB */
 
 #include <boost/spirit/include/qi.hpp>
 #include <boost/foreach.hpp>
@@ -226,14 +229,10 @@ private:
   std::string m_table_name;
 };
 
-} // anonymous namespace
-
-struct dump_reader::pimpl {
-  pimpl(const std::string &cmd, const std::string &table_name)
-    : m_proc(cmd),
-      m_line_filter(m_proc, 1024 * 1024),
-      m_cont_filter(m_line_filter, table_name),
-      m_db(NULL),
+#ifdef HAVE_LEVELDB  
+struct db_writer {
+  explicit db_writer(const std::string &table_name)
+    : m_db(NULL),
       m_batch(),
       m_batch_size(0),
       m_write_options() {
@@ -249,12 +248,9 @@ struct dump_reader::pimpl {
     if (!status.ok()) {
       BOOST_THROW_EXCEPTION(leveldb_error() << leveldb_status(status.ToString()));
     }
-
-    // get the headers for the COPY data
-    m_column_names = m_cont_filter.init();
   }
 
-  ~pimpl() {
+  ~db_writer() {
     if (m_batch_size > 0) {
       m_db->Write(m_write_options, &m_batch);
       m_batch.Clear();
@@ -275,14 +271,50 @@ struct dump_reader::pimpl {
     }
   }
   
-  process m_proc;
-  to_line_filter<process> m_line_filter;
-  filter_copy_contents<to_line_filter<process> > m_cont_filter;
-  
   leveldb::DB *m_db;
   leveldb::WriteBatch m_batch;
   size_t m_batch_size;
   leveldb::WriteOptions m_write_options;
+};
+
+#else /* HAVE_LEVELDB */
+
+struct db_writer {
+  explicit db_writer(const std::string &table_name) {
+    // TODO MERGESORT
+  }
+
+  ~db_writer() {
+    // TODO MERGESORT
+  }
+
+  void put(const std::string &k, const std::string &v) {
+    // TODO MERGESORT
+  }
+};
+#endif /* HAVE_LEVELDB */
+
+} // anonymous namespace
+
+struct dump_reader::pimpl {
+  pimpl(const std::string &cmd, const std::string &table_name)
+    : m_proc(cmd),
+      m_line_filter(m_proc, 1024 * 1024),
+      m_cont_filter(m_line_filter, table_name),
+      m_writer(table_name) {
+
+    // get the headers for the COPY data
+    m_column_names = m_cont_filter.init();
+  }
+
+  ~pimpl() {
+  }
+
+  process m_proc;
+  to_line_filter<process> m_line_filter;
+  filter_copy_contents<to_line_filter<process> > m_cont_filter;
+
+  db_writer m_writer;
 
   std::vector<std::string> m_column_names;
 };
@@ -307,5 +339,5 @@ size_t dump_reader::read(std::string &line) {
 }
 
 void dump_reader::put(const std::string &k, const std::string &v) {
-  m_impl->put(k, v);
+  m_impl->m_writer.put(k, v);
 }

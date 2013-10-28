@@ -17,9 +17,6 @@
 #include <boost/make_shared.hpp>
 #include <boost/foreach.hpp>
 
-#include <leveldb/db.h>
-#include <leveldb/options.h>
-
 namespace bt = boost::posix_time;
 namespace fs = boost::filesystem;
 
