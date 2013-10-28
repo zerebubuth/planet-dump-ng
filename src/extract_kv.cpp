@@ -139,7 +139,12 @@ std::string to_binary(std::ostringstream &out, const T &t) {
   out.clear();
   out.seekp(0);
   bf::fold(t, 0, app_item(out));
-  return out.str();
+  // because out.str() gives us the contents of the string buffer,
+  // not the contents written since clear() was called, we need to
+  // chop off any remaining garbage at the end.
+  std::string rv = out.str();
+  rv.resize(out.tellp());
+  return rv;
 }
 
 } // anonymous namespace
