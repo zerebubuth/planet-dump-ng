@@ -251,13 +251,16 @@ struct db_writer {
   }
 
   ~db_writer() {
+    delete m_db;
+  }
+
+  void finish() {
     if (m_batch_size > 0) {
       m_db->Write(m_write_options, &m_batch);
       m_batch.Clear();
       m_batch_size = 0;
     }
     m_db->CompactRange(NULL, NULL);
-    delete m_db;
   }
 
   void put(const std::string &k, const std::string &v) {
@@ -285,6 +288,10 @@ struct db_writer {
   }
 
   ~db_writer() {
+    // TODO MERGESORT
+  }
+
+  void finish() {
     // TODO MERGESORT
   }
 
@@ -340,4 +347,8 @@ size_t dump_reader::read(std::string &line) {
 
 void dump_reader::put(const std::string &k, const std::string &v) {
   m_impl->m_writer.put(k, v);
+}
+
+void dump_reader::finish() {
+  m_impl->m_writer.finish();
 }

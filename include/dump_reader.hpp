@@ -16,6 +16,7 @@ struct dump_reader
   const std::vector<std::string> &column_names() const;
   size_t read(std::string &);
   void put(const std::string &, const std::string &);
+  void finish();
 
 private:
   struct pimpl;
