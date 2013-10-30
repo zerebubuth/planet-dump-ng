@@ -2,6 +2,7 @@
 #include "config.h"
 
 #include <cstdio>
+#include <limits>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/format.hpp>
@@ -12,6 +13,14 @@
 #include <leveldb/db.h>
 #include <leveldb/options.h>
 #include <leveldb/write_batch.h>
+#else /* HAVE_LEVELDB */
+#include <boost/filesystem.hpp>
+#include <boost/iostreams/stream.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+#include <boost/iostreams/filtering_streambuf.hpp>
+#include <boost/iostreams/operations.hpp>
+#include <fstream>
+//#include <fcntl.h>
 #endif /* HAVE_LEVELDB */
 
 #include <boost/spirit/include/qi.hpp>
@@ -22,10 +31,15 @@
 #include <boost/weak_ptr.hpp>
 
 #define BATCH_SIZE (10240)
+#define MAX_MERGESORT_BLOCK_SIZE (67108864)
 
 namespace {
 
 namespace qi = boost::spirit::qi;
+#ifndef HAVE_LEVELDB
+namespace bio = boost::iostreams;
+namespace fs = boost::filesystem;
+#endif /* !HAVE_LEVELDB */
 
 struct tag_copy_header;
 struct tag_leveldb_status;
@@ -282,21 +296,211 @@ struct db_writer {
 
 #else /* HAVE_LEVELDB */
 
-struct db_writer {
-  explicit db_writer(const std::string &table_name) {
-    // TODO MERGESORT
+typedef std::pair<std::string, std::string> kv_pair_t;
+
+struct block_reader : public boost::noncopyable {
+  block_reader(const std::string &subdir, size_t block_counter)
+    : m_file_name((boost::format("%1$s/part_%2$08x.data") % subdir % block_counter).str()),
+      m_end(false) {
+    if (!fs::exists(m_file_name)) {
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("File '%1%' does not exist.") % m_file_name).str()));
+    }
+    m_file.open(m_file_name.c_str());
+    if (!m_file.is_open()) {
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Unable to open '%1%'.") % m_file_name).str()));
+    }
+    if (!m_file.good()) {
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("File '%1%' is open, but not good.") % m_file_name).str()));
+    }
+
+    m_stream.push(bio::gzip_decompressor());
+    m_stream.push(m_file);
+
+    next();
   }
 
+  ~block_reader() {
+    bio::close(m_stream);
+    m_file.close();
+  }
+
+  bool at_end() { return m_end; }
+
+  const kv_pair_t &value() { return m_current; }
+
+  void next() {
+    uint16_t ksz, vsz;
+    
+    if (bio::read(m_stream, (char *)&ksz, sizeof(uint16_t)) != sizeof(uint16_t)) { m_end = true; return; }
+    if (bio::read(m_stream, (char *)&vsz, sizeof(uint16_t)) != sizeof(uint16_t)) { m_end = true; return; }
+
+    m_current.first.resize(ksz);
+    if (bio::read(m_stream, &m_current.first[0], ksz) != ksz) { m_end = true; return; }
+    m_current.second.resize(vsz);
+    if (bio::read(m_stream, &m_current.second[0], vsz) != vsz) { m_end = true; return; }
+  }
+
+  const std::string &file_name() const { return m_file_name; }
+
+private:
+  std::string m_file_name;
+  bool m_end;
+  std::ifstream m_file;
+  bio::filtering_streambuf<bio::input> m_stream;
+  kv_pair_t m_current;
+};
+
+struct block_writer : public boost::noncopyable {
+  block_writer(const std::string &subdir, const std::string &bit, size_t block_counter) {
+    std::string file_name = (boost::format("%1$s/%2$s_%3$08x.data") % subdir % bit % block_counter).str();
+    if (fs::exists(file_name)) {
+      fs::remove(file_name);
+    }
+    m_out.open(file_name.c_str());
+    if (!m_out.is_open()) {
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Unable to open '%1%'.") % file_name).str()));
+    }
+    if (!m_out.good()) {
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("File '%1%' is open, but not good.") % file_name).str()));
+    }
+
+    m_stream.push(bio::gzip_compressor(1));
+    m_stream.push(m_out);
+
+    // TODO: future optimisation
+    // int fd = (m_out.rdbuf())->fd();
+    // int status = posix_fallocate(fd, 0, MAX_MERGESORT_BLOCK_SIZE);
+    // if (status != 0) {
+    //   BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("posix_fallocate() on '%1%' failed. status=%2%.") % file_name % status).str()));
+    // }
+  }
+
+  ~block_writer() {
+    bio::close(m_stream);
+    m_out.close();
+  }
+
+  inline void operator()(const kv_pair_t &kv) {
+    const std::string &k = kv.first;
+    const std::string &v = kv.second;
+    uint16_t key_size = uint16_t(k.size()), val_size = uint16_t(v.size());
+    bio::write(m_stream, (const char *)(&key_size), sizeof(uint16_t));
+    bio::write(m_stream, (const char *)(&val_size), sizeof(uint16_t));
+    bio::write(m_stream, k.c_str(), k.size());
+    bio::write(m_stream, v.c_str(), v.size());
+  }
+
+private:
+  std::ofstream m_out;
+  bio::filtering_streambuf<bio::output> m_stream;
+};
+
+struct db_writer : public boost::noncopyable {
+  explicit db_writer(const std::string &table_name) 
+    : m_subdir(table_name),
+      m_block_counter(0),
+      m_bytes_this_block(0) {
+    fs::create_directories(m_subdir);
+  }
+  
   ~db_writer() {
-    // TODO MERGESORT
   }
-
+  
   void finish() {
-    // TODO MERGESORT
+    if (m_strings.size() > 0) {
+      flush_block();
+    }
+    combine_blocks();
+  }
+  
+  void put(const std::string &k, const std::string &v) {
+    if (k.size() > size_t(std::numeric_limits<uint16_t>::max())) {
+      BOOST_THROW_EXCEPTION(std::runtime_error("Key too large for uint16_t."));
+    }
+    if (v.size() > size_t(std::numeric_limits<uint16_t>::max())) {
+      BOOST_THROW_EXCEPTION(std::runtime_error("Value too large for uint16_t."));
+    }
+    size_t bytes = k.size() + v.size() + 2 * sizeof(uint16_t);
+    if ((m_bytes_this_block + bytes) > MAX_MERGESORT_BLOCK_SIZE) {
+      flush_block();
+    }
+    m_strings.push_back(make_pair(k, v));
+    m_bytes_this_block += bytes;
   }
 
-  void put(const std::string &k, const std::string &v) {
-    // TODO MERGESORT
+private:
+  std::string m_subdir;
+  size_t m_block_counter;
+  size_t m_bytes_this_block;
+  std::vector<kv_pair_t> m_strings;
+
+  struct compare_first {
+    bool operator()(const kv_pair_t &a, const kv_pair_t &b) const {
+      const size_t end = std::min(a.first.size(), b.first.size());
+      for (size_t i = 0; i < end; ++i) {
+        unsigned char ac = (unsigned char)a.first[i];
+        unsigned char bc = (unsigned char)b.first[i];
+        if (ac < bc) { return true; }
+        if (ac > bc) { return false; }
+      }
+      return end == a.first.size();
+    }
+  };
+  
+  void flush_block() {
+    block_writer writer(m_subdir, "part", m_block_counter);
+
+    std::sort(m_strings.begin(), m_strings.end(), compare_first());
+
+    BOOST_FOREACH(const kv_pair_t &kv, m_strings) {
+      writer(kv);
+    }
+
+    m_strings.clear();
+    m_bytes_this_block = 0;
+    ++m_block_counter;
+  }
+
+  void combine_blocks() {
+    compare_first comp;
+
+    if (m_block_counter == 1) {
+      std::string part_file_name = (boost::format("%1$s/part_%2$08x.data") % m_subdir % 0).str();
+      std::string final_file_name = (boost::format("%1$s/final_%2$08x.data") % m_subdir % 0).str();
+      fs::rename(part_file_name, final_file_name);
+      return;
+    }
+
+    std::list<block_reader*> readers;
+    for (size_t i = 0; i < m_block_counter; ++i) {
+      readers.push_back(new block_reader(m_subdir, i));
+    }
+
+    block_writer writer(m_subdir, "final", 0);
+    while (!readers.empty()) {
+      std::list<block_reader*>::iterator min_itr = readers.begin();
+      kv_pair_t min_pair = (*min_itr)->value();
+
+      std::list<block_reader*>::iterator itr = readers.begin();
+      ++itr;
+      while (itr != readers.end()) {
+        const kv_pair_t &val = (*itr)->value();
+        if (comp(val, min_pair)) {
+          min_pair = val;
+          min_itr = itr;
+        }
+        ++itr;
+      }
+
+      writer(min_pair);
+
+      (*min_itr)->next();
+      if ((*min_itr)->at_end()) {
+        fs::remove((*min_itr)->file_name());
+        delete *min_itr;
+        readers.erase(min_itr);
+      }
+    }
   }
 };
 #endif /* HAVE_LEVELDB */

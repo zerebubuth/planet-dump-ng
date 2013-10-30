@@ -21,6 +21,18 @@
 #ifdef HAVE_LEVELDB
 #include <leveldb/db.h>
 #include <leveldb/options.h>
+#else /* HAVE_LEVELDB */
+#include <boost/filesystem.hpp>
+#include <boost/iostreams/stream.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+#include <boost/iostreams/filtering_streambuf.hpp>
+#include <boost/iostreams/operations.hpp>
+#include <fstream>
+#endif /* HAVE_LEVELDB */
+
+#ifndef HAVE_LEVELDB
+namespace bio = boost::iostreams;
+namespace fs = boost::filesystem;
 #endif /* HAVE_LEVELDB */
 
 namespace {
@@ -111,18 +123,50 @@ struct db_reader {
 #else /* HAVE_LEVELDB */
 template <typename T>
 struct db_reader {
-  db_reader(const std::string &) {
-    // TODO MERGESORT
+  explicit db_reader(const std::string &subdir) : m_end(false) {
+    std::string file_name = (boost::format("%1$s/final_%2$08x.data") % subdir % 0).str();
+    if (!fs::exists(file_name)) {
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("File '%1%' does not exist.") % file_name).str()));
+    }
+    m_file.open(file_name.c_str());
+    if (!m_file.is_open()) {
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Unable to open '%1%'.") % file_name).str()));
+    }
+    if (!m_file.good()) {
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("File '%1%' is open, but not good.") % file_name).str()));
+    }
+
+    m_stream.push(bio::gzip_decompressor());
+    m_stream.push(m_file);
   }
 
   ~db_reader() {
-    // TODO MERGESORT
+    bio::close(m_stream);
+    m_file.close();
   }
 
   bool operator()(T &t) {
-    // TODO MERGESORT
-    return false;
+    if (m_end) { return false; }
+    uint16_t ksz, vsz;
+    
+    if (bio::read(m_stream, (char *)&ksz, sizeof(uint16_t)) != sizeof(uint16_t)) { m_end = true; return false; }
+    if (bio::read(m_stream, (char *)&vsz, sizeof(uint16_t)) != sizeof(uint16_t)) { m_end = true; return false; }
+
+    std::string k, v;
+    k.resize(ksz);
+    if (bio::read(m_stream, &k[0], ksz) != ksz) { m_end = true; return false; }
+    v.resize(vsz);
+    if (bio::read(m_stream, &v[0], vsz) != vsz) { m_end = true; return false; }
+
+    insert_kv(t, k, v);
+
+    return true;
   }
+
+private:
+  bool m_end;
+  std::ifstream m_file;
+  bio::filtering_streambuf<bio::input> m_stream;
 };
 #endif /* HAVE_LEVELDB */
 
