@@ -19,6 +19,8 @@
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <boost/iostreams/operations.hpp>
+#include <boost/thread.hpp>
+#include <boost/make_shared.hpp>
 #include <fstream>
 //#include <fcntl.h>
 #endif /* HAVE_LEVELDB */
@@ -299,8 +301,8 @@ struct db_writer {
 typedef std::pair<std::string, std::string> kv_pair_t;
 
 struct block_reader : public boost::noncopyable {
-  block_reader(const std::string &subdir, size_t block_counter)
-    : m_file_name((boost::format("%1$s/part_%2$08x.data") % subdir % block_counter).str()),
+  block_reader(const std::string &subdir, const std::string &prefix, size_t block_counter)
+    : m_file_name((boost::format("%1$s/%2$s_%3$08x.data") % subdir % prefix % block_counter).str()),
       m_end(false) {
     if (!fs::exists(m_file_name)) {
       BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("File '%1%' does not exist.") % m_file_name).str()));
@@ -395,6 +397,120 @@ private:
   bio::filtering_streambuf<bio::output> m_stream;
 };
 
+struct compare_first {
+  bool operator()(const kv_pair_t &a, const kv_pair_t &b) const {
+    const size_t end = std::min(a.first.size(), b.first.size());
+    for (size_t i = 0; i < end; ++i) {
+      unsigned char ac = (unsigned char)a.first[i];
+      unsigned char bc = (unsigned char)b.first[i];
+      if (ac < bc) { return true; }
+      if (ac > bc) { return false; }
+    }
+    return end == a.first.size();
+  }
+};
+
+struct thread_control_block : public boost::noncopyable {
+  std::string m_subdir, m_prefix;
+  size_t m_block_number;
+  std::vector<kv_pair_t> m_strings;
+  std::vector<boost::shared_ptr<thread_control_block> > m_waits;
+  boost::shared_ptr<boost::thread> m_thread;
+  boost::exception_ptr m_error;
+
+  thread_control_block(std::string subdir, std::string prefix, size_t block_number,
+                       std::vector<kv_pair_t> &strings,  
+                       std::vector<boost::shared_ptr<thread_control_block> > waits = 
+                       std::vector<boost::shared_ptr<thread_control_block> >())
+    : m_subdir(subdir), m_prefix(prefix), m_block_number(block_number), m_strings(), m_waits(waits),
+      m_thread(), m_error() {
+    std::swap(m_strings, strings);
+    strings.clear();
+    m_thread = boost::make_shared<boost::thread>(boost::bind(&thread_control_block::run, boost::ref(*this)));
+  }
+
+  std::string file_name() const {
+    return (boost::format("%1$s/%2$s_%3$08x.data") % m_subdir % m_prefix % m_block_number).str();
+  }
+
+  static void run(thread_control_block &tcb) {
+    try {
+      if (tcb.m_waits.size() > 0) {
+        tcb.run_merge();
+
+      } else {
+        tcb.run_write();
+      }
+
+    } catch (...) {
+      tcb.m_error = boost::current_exception();
+    }
+  }
+
+  void run_merge() {
+    if (m_waits.size() == 1) {
+      // wait for only thread to finish
+      thread_control_block &tcb2 = *(m_waits[0]);
+      tcb2.m_thread->join();
+      if (tcb2.m_error) { boost::rethrow_exception(tcb2.m_error); }
+      
+      // just move it into place.
+      std::string part_file_name = tcb2.file_name();
+      std::string final_file_name = file_name();
+      fs::rename(part_file_name, final_file_name);
+      return;
+    }
+    
+    std::list<block_reader*> readers;
+    BOOST_FOREACH(boost::shared_ptr<thread_control_block> tcb2, m_waits) {
+      tcb2->m_thread->join();
+      if (tcb2->m_error) { boost::rethrow_exception(tcb2->m_error); }
+      readers.push_back(new block_reader(tcb2->m_subdir, tcb2->m_prefix, tcb2->m_block_number));
+    }
+    m_waits.clear();
+    
+    compare_first comp;
+    block_writer writer(m_subdir, m_prefix, m_block_number);
+    while (!readers.empty()) {
+      std::list<block_reader*>::iterator min_itr = readers.begin();
+      kv_pair_t min_pair = (*min_itr)->value();
+      
+      std::list<block_reader*>::iterator itr = readers.begin();
+      ++itr;
+      while (itr != readers.end()) {
+        const kv_pair_t &val = (*itr)->value();
+        if (comp(val, min_pair)) {
+          min_pair = val;
+          min_itr = itr;
+        }
+        ++itr;
+      }
+      
+      writer(min_pair);
+      
+      (*min_itr)->next();
+      if ((*min_itr)->at_end()) {
+        fs::remove((*min_itr)->file_name());
+        delete *min_itr;
+        readers.erase(min_itr);
+      }
+    }
+  }
+
+  void run_write() {
+    block_writer writer(m_subdir, m_prefix, m_block_number);
+    compare_first comp;
+
+    std::sort(m_strings.begin(), m_strings.end(), comp);
+
+    BOOST_FOREACH(const kv_pair_t &kv, m_strings) {
+      writer(kv);
+    }
+
+    m_strings.clear();
+  }
+};
+
 struct db_writer : public boost::noncopyable {
   explicit db_writer(const std::string &table_name) 
     : m_subdir(table_name),
@@ -404,6 +520,27 @@ struct db_writer : public boost::noncopyable {
   }
   
   ~db_writer() {
+    BOOST_FOREACH(boost::shared_ptr<thread_control_block> tcb, m_blocks) {
+      try {
+        tcb->m_thread->join();
+      } catch (...) {
+        std::cerr << "Caught exception on " << tcb->file_name() << " but already in destructor." << std::endl;
+      }
+    }
+    BOOST_FOREACH(boost::shared_ptr<thread_control_block> tcb, m_blocks2) {
+      try {
+        tcb->m_thread->join();
+      } catch (...) {
+        std::cerr << "Caught exception on " << tcb->file_name() << " but already in destructor." << std::endl;
+      }
+    }
+    BOOST_FOREACH(boost::shared_ptr<thread_control_block> tcb, m_blocks3) {
+      try {
+        tcb->m_thread->join();
+      } catch (...) {
+        std::cerr << "Caught exception on " << tcb->file_name() << " but already in destructor." << std::endl;
+      }
+    }
   }
   
   void finish() {
@@ -433,74 +570,41 @@ private:
   size_t m_block_counter;
   size_t m_bytes_this_block;
   std::vector<kv_pair_t> m_strings;
-
-  struct compare_first {
-    bool operator()(const kv_pair_t &a, const kv_pair_t &b) const {
-      const size_t end = std::min(a.first.size(), b.first.size());
-      for (size_t i = 0; i < end; ++i) {
-        unsigned char ac = (unsigned char)a.first[i];
-        unsigned char bc = (unsigned char)b.first[i];
-        if (ac < bc) { return true; }
-        if (ac > bc) { return false; }
-      }
-      return end == a.first.size();
-    }
-  };
+  std::vector<boost::shared_ptr<thread_control_block> > m_blocks, m_blocks2, m_blocks3;
   
   void flush_block() {
-    block_writer writer(m_subdir, "part", m_block_counter);
-
-    std::sort(m_strings.begin(), m_strings.end(), compare_first());
-
-    BOOST_FOREACH(const kv_pair_t &kv, m_strings) {
-      writer(kv);
-    }
-
+    static const std::string part_1("part"), part_2("part2"), part_3("part3");
+    m_blocks.push_back(boost::make_shared<thread_control_block>(m_subdir, part_1, m_block_counter, boost::ref(m_strings)));
     m_strings.clear();
+
+    if (m_blocks.size() >= 16) {
+      m_blocks2.push_back(boost::make_shared<thread_control_block>(m_subdir, part_2, m_block_counter, boost::ref(m_strings), m_blocks));
+      m_strings.clear();
+      m_blocks.clear();
+
+      if (m_blocks2.size() >= 16) {
+        m_blocks3.push_back(boost::make_shared<thread_control_block>(m_subdir, part_3, m_block_counter, boost::ref(m_strings), m_blocks2));
+        m_strings.clear();
+        m_blocks2.clear();
+      }
+    }
     m_bytes_this_block = 0;
     ++m_block_counter;
   }
 
   void combine_blocks() {
-    compare_first comp;
-
-    if (m_block_counter == 1) {
-      std::string part_file_name = (boost::format("%1$s/part_%2$08x.data") % m_subdir % 0).str();
-      std::string final_file_name = (boost::format("%1$s/final_%2$08x.data") % m_subdir % 0).str();
-      fs::rename(part_file_name, final_file_name);
-      return;
+    if (m_blocks2.size() > 0) {
+      m_blocks.insert(m_blocks.end(), m_blocks2.begin(), m_blocks2.end());
+      m_blocks2.clear();
     }
-
-    std::list<block_reader*> readers;
-    for (size_t i = 0; i < m_block_counter; ++i) {
-      readers.push_back(new block_reader(m_subdir, i));
+    if (m_blocks3.size() > 0) {
+      m_blocks.insert(m_blocks.end(), m_blocks3.begin(), m_blocks3.end());
+      m_blocks3.clear();
     }
-
-    block_writer writer(m_subdir, "final", 0);
-    while (!readers.empty()) {
-      std::list<block_reader*>::iterator min_itr = readers.begin();
-      kv_pair_t min_pair = (*min_itr)->value();
-
-      std::list<block_reader*>::iterator itr = readers.begin();
-      ++itr;
-      while (itr != readers.end()) {
-        const kv_pair_t &val = (*itr)->value();
-        if (comp(val, min_pair)) {
-          min_pair = val;
-          min_itr = itr;
-        }
-        ++itr;
-      }
-
-      writer(min_pair);
-
-      (*min_itr)->next();
-      if ((*min_itr)->at_end()) {
-        fs::remove((*min_itr)->file_name());
-        delete *min_itr;
-        readers.erase(min_itr);
-      }
-    }
+    thread_control_block tcb(m_subdir, "final", 0, m_strings, m_blocks);
+    m_strings.clear();
+    tcb.m_thread->join();
+    if (tcb.m_error) { boost::rethrow_exception(tcb.m_error); }
   }
 };
 #endif /* HAVE_LEVELDB */
