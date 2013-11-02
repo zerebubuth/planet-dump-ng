@@ -30,6 +30,31 @@ struct shell_escape_char {
   }
 };
 
+/**
+ * according to http://www.w3.org/TR/xml/#charsets, there are a range of
+ * characters which are valid UTF-8, but invalid XML. we remove some of
+ * them here, mainly ASCII control characters, which otherwise choke
+ * something which would read these files. note that libxml2 will
+ * happily *output* them, which is also a problem for anyone reading
+ * from the API :-(
+ */
+std::string kill_xml_bad_chars(const std::string &s) {
+  const size_t size = s.size();
+  std::string output('\0', size);
+  
+  for (size_t i = 0; i < size; ++i) {
+    char c = s[i];
+    if ((c < 0x20) && (c != 0x09) && (c != 0x0a) && (c != 0x0d)) {
+      // replace with question mark is same behaviour as existing planet
+      // dump program.
+      c = '?';
+    }
+    output[i] = c;
+  }
+
+  return output;
+}
+
 std::string popen_command(const std::string &file_name, const boost::program_options::variables_map &options) {
   std::string compress_command;
   try {
@@ -213,17 +238,19 @@ void xml_writer::pimpl::attribute(const char *name, const pt::ptime &t) {
 }
 
 void xml_writer::pimpl::attribute(const char *name, const char *s) {
+  std::string fixed = kill_xml_bad_chars(s);
   if (xmlTextWriterWriteAttribute(m_writer, 
                                   BAD_CAST name,
-                                  BAD_CAST s) < 0) {
+                                  BAD_CAST fixed.c_str()) < 0) {
     BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write string attribute."));
   }
 }
 
 void xml_writer::pimpl::attribute(const char *name, const std::string &s) {
+  std::string fixed = kill_xml_bad_chars(s);
   if (xmlTextWriterWriteAttribute(m_writer, 
                                   BAD_CAST name,
-                                  BAD_CAST s.c_str()) < 0) {
+                                  BAD_CAST fixed.c_str()) < 0) {
     BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write string attribute."));
   }
 }
