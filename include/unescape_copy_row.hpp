@@ -122,6 +122,7 @@ private:
 
     void operator()(std::string &v) const {
       std::pair<char *, size_t> str = *itr++;
+      unescape(str);
       v.assign(str.first, str.second);
     }
 
