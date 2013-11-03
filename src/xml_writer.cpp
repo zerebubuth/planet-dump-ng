@@ -328,6 +328,8 @@ void xml_writer::changesets(const std::vector<changeset> &css,
       m_impl->attribute("max_lon", double(cs.max_lon.get()) / SCALE);
     }
 
+    m_impl->attribute("num_changes", cs.num_changes);
+
     while ((tag_itr != ts.end()) && (tag_itr->element_id <= cs.id)) {
       if (tag_itr->element_id == cs.id) {
         m_impl->add_tag(*tag_itr);
