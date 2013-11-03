@@ -40,11 +40,11 @@ struct shell_escape_char {
  */
 std::string kill_xml_bad_chars(const std::string &s) {
   const size_t size = s.size();
-  std::string output('\0', size);
+  std::string output(size, '\0');
   
   for (size_t i = 0; i < size; ++i) {
     char c = s[i];
-    if ((c < 0x20) && (c != 0x09) && (c != 0x0a) && (c != 0x0d)) {
+    if ((c >= 0x00) && (c < 0x20) && (c != 0x09) && (c != 0x0a) && (c != 0x0d)) {
       // replace with question mark is same behaviour as existing planet
       // dump program.
       c = '?';
