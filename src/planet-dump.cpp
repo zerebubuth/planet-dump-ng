@@ -113,11 +113,11 @@ int main(int argc, char *argv[]) {
     std::vector<boost::shared_ptr<output_writer> > writers;
     if (options.count("history-xml")) {
       std::string output_file = options["history-xml"].as<std::string>();
-      writers.push_back(boost::shared_ptr<output_writer>(new xml_writer(output_file, options, display_name_map, max_time)));
+      writers.push_back(boost::shared_ptr<output_writer>(new xml_writer(output_file, options, display_name_map, max_time, true)));
     }
     if (options.count("history-pbf")) {
       std::string output_file = options["history-pbf"].as<std::string>();
-      writers.push_back(boost::shared_ptr<output_writer>(new pbf_writer(output_file, options, display_name_map, max_time)));
+      writers.push_back(boost::shared_ptr<output_writer>(new pbf_writer(output_file, options, display_name_map, max_time, true)));
     }
     if (options.count("xml")) {
       std::string output_file = options["xml"].as<std::string>();
