@@ -81,7 +81,7 @@ std::string popen_command(const std::string &file_name, const boost::program_opt
 } // anonymous namespace
 
 struct xml_writer::pimpl {
-  pimpl(const std::string &file_name, const boost::program_options::variables_map &options, const pt::ptime &now);
+  pimpl(const std::string &file_name, const boost::program_options::variables_map &options, const pt::ptime &now, bool has_history);
   ~pimpl();
 
   void begin(const char *name);
@@ -104,6 +104,7 @@ struct xml_writer::pimpl {
   FILE *m_out;
   xmlTextWriterPtr m_writer;
   pt::ptime m_now;
+  bool m_has_history;
 };
 
 static int wrap_write(void *context, const char *buffer, int len) {
@@ -147,9 +148,10 @@ static int wrap_close(void *context) {
   return 0;
 }
 
-xml_writer::pimpl::pimpl(const std::string &file_name, const boost::program_options::variables_map &options, const pt::ptime &now) 
+xml_writer::pimpl::pimpl(const std::string &file_name, const boost::program_options::variables_map &options, const pt::ptime &now, bool has_history) 
   : m_command(popen_command(file_name, options)), 
-    m_out(popen(m_command.c_str(), "w")), m_writer(NULL), m_now(now) {
+    m_out(popen(m_command.c_str(), "w")), m_writer(NULL), m_now(now),
+    m_has_history(has_history) {
 
   if (m_out == NULL) {
     BOOST_THROW_EXCEPTION(std::runtime_error("Unable to popen compression command for output."));
@@ -275,9 +277,56 @@ void xml_writer::pimpl::add_tag(const old_tag &t) {
   end();
 }
 
+namespace {
+
+/**
+ * write attributes which are common to nodes, ways and relations.
+ */
+template <typename T>
+void write_common_attributes(const T &t, xml_writer::pimpl &impl, 
+                             const xml_writer::changeset_map_t &changesets,
+                             const xml_writer::user_map_t &users) {
+  impl.attribute("timestamp", t.timestamp);
+  impl.attribute("version", t.version);
+  impl.attribute("changeset", t.changeset_id);
+  // it seems a "current" planet doesn't have visible attributes,
+  // at least the current planetdump script doesn't add them.
+  if (impl.m_has_history) { impl.attribute("visible", t.visible); }
+  
+  xml_writer::changeset_map_t::const_iterator cs_itr = changesets.find(t.changeset_id);
+  if (cs_itr != changesets.end()) {
+    xml_writer::user_map_t::const_iterator user_itr = users.find(cs_itr->second);
+    if (user_itr != users.end()) {
+      impl.attribute("user", user_itr->second);
+      impl.attribute("uid", user_itr->first);
+    }
+  }
+}
+
+/**
+ * write the tags which belong to a particular version of a node,
+ * way or relation.
+ */
+void write_tags(int64_t id, int64_t version, 
+                std::vector<old_tag>::const_iterator &tag_itr,
+                const std::vector<old_tag>::const_iterator &end_itr,
+                xml_writer::pimpl &impl) {
+  while ((tag_itr != end_itr) && 
+         ((tag_itr->element_id < id) ||
+          ((tag_itr->element_id == id) &&
+           (tag_itr->version <= version)))) {
+    if ((tag_itr->element_id == id) && (tag_itr->version == version)) {
+      impl.add_tag(*tag_itr);
+    }
+    ++tag_itr;
+  }
+}
+
+} // anonymous namespace
+
 xml_writer::xml_writer(const std::string &file_name, const boost::program_options::variables_map &options,
                        const user_map_t &users, const pt::ptime &max_time, bool has_history)
-  : m_impl(new pimpl(file_name, options, max_time)),
+  : m_impl(new pimpl(file_name, options, max_time, has_history)),
     m_users(users) {
   m_impl->begin("osm");
   m_impl->attribute("license",     OSM_LICENSE_TEXT);
@@ -353,27 +402,12 @@ void xml_writer::nodes(const std::vector<node> &ns,
       m_impl->attribute("lat", double(n.latitude) / SCALE);
       m_impl->attribute("lon", double(n.longitude) / SCALE);
     }
-    m_impl->attribute("timestamp", n.timestamp);
-    m_impl->attribute("version", n.version);
-    m_impl->attribute("changeset", n.changeset_id);
 
-    changeset_map_t::const_iterator cs_itr = m_changesets.find(n.changeset_id);
-    if (cs_itr != m_changesets.end()) {
-      user_map_t::const_iterator user_itr = m_users.find(cs_itr->second);
-      if (user_itr != m_users.end()) {
-        m_impl->attribute("user", user_itr->second);
-        m_impl->attribute("uid", user_itr->first);
-      }
-    }
+    write_common_attributes<node>(n, *m_impl, m_changesets, m_users);
 
-    while ((tag_itr != ts.end()) && 
-           ((tag_itr->element_id < n.id) ||
-            ((tag_itr->element_id == n.id) &&
-             (tag_itr->version <= n.version)))) {
-      if ((tag_itr->element_id == n.id) && (tag_itr->version == n.version)) {
-        m_impl->add_tag(*tag_itr);
-      }
-      ++tag_itr;
+    // deleted nodes shouldn't have tags.
+    if (n.visible) {
+      write_tags(n.id, n.version, tag_itr, ts.end(), *m_impl);
     }
 
     m_impl->end();
@@ -389,39 +423,25 @@ void xml_writer::ways(const std::vector<way> &ws,
   BOOST_FOREACH(const way &w, ws) {
     m_impl->begin("way");
     m_impl->attribute("id", w.id);
-    m_impl->attribute("timestamp", w.timestamp);
-    m_impl->attribute("version", w.version);
-    m_impl->attribute("changeset", w.changeset_id);
-    
-    changeset_map_t::const_iterator cs_itr = m_changesets.find(w.changeset_id);
-    if (cs_itr != m_changesets.end()) {
-      user_map_t::const_iterator user_itr = m_users.find(cs_itr->second);
-      if (user_itr != m_users.end()) {
-        m_impl->attribute("user", user_itr->second);
-        m_impl->attribute("uid", user_itr->first);
-      }
-    }
 
-    while ((nd_itr != wns.end()) && 
-           ((nd_itr->way_id < w.id) ||
-            ((nd_itr->way_id == w.id) &&
-             (nd_itr->version <= w.version)))) {
-      if ((nd_itr->way_id == w.id) && (nd_itr->version == w.version)) {
-        m_impl->begin("nd");
-        m_impl->attribute("ref", nd_itr->node_id);
-        m_impl->end();
-      }
-      ++nd_itr;
-    }
+    write_common_attributes<way>(w, *m_impl, m_changesets, m_users);
 
-    while ((tag_itr != ts.end()) && 
-           ((tag_itr->element_id < w.id) ||
-            ((tag_itr->element_id == w.id) &&
-             (tag_itr->version <= w.version)))) {
-      if ((tag_itr->element_id == w.id) && (tag_itr->version == w.version)) {
-        m_impl->add_tag(*tag_itr);
+    // deleted ways shouldn't have nodes or tags, or at least we
+    // shouldn't output them.
+    if (w.visible) {
+      while ((nd_itr != wns.end()) && 
+             ((nd_itr->way_id < w.id) ||
+              ((nd_itr->way_id == w.id) &&
+               (nd_itr->version <= w.version)))) {
+        if ((nd_itr->way_id == w.id) && (nd_itr->version == w.version)) {
+          m_impl->begin("nd");
+          m_impl->attribute("ref", nd_itr->node_id);
+          m_impl->end();
+        }
+        ++nd_itr;
       }
-      ++tag_itr;
+      
+      write_tags(w.id, w.version, tag_itr, ts.end(), *m_impl);
     }
 
     m_impl->end();
@@ -437,48 +457,33 @@ void xml_writer::relations(const std::vector<relation> &rs,
   BOOST_FOREACH(const relation &r, rs) {
     m_impl->begin("relation");
     m_impl->attribute("id", r.id);
-    m_impl->attribute("timestamp", r.timestamp);
-    m_impl->attribute("version", r.version);
-    m_impl->attribute("changeset", r.changeset_id);
+    write_common_attributes<relation>(r, *m_impl, m_changesets, m_users);
+
+    // deleted relations don't have members or tags, or shouldn't have
+    // them output anyway.
+    if (r.visible) {
+      while ((rm_itr != rms.end()) && 
+             ((rm_itr->relation_id < r.id) ||
+              ((rm_itr->relation_id == r.id) &&
+               (rm_itr->version <= r.version)))) {
+        if ((rm_itr->relation_id == r.id) && (rm_itr->version == r.version)) {
+          m_impl->begin("member");
+          const char *type = 
+            (rm_itr->member_id == nwr_node) ? "node" :
+            (rm_itr->member_id == nwr_way) ? "way" :
+            "relation";
+          
+          m_impl->attribute("type", type);
+          m_impl->attribute("ref", rm_itr->member_id);
+          m_impl->attribute("role", rm_itr->member_role);
+          m_impl->end();
+        }
+        ++rm_itr;
+      }
+      
+      write_tags(r.id, r.version, tag_itr, ts.end(), *m_impl);
+    }
     
-    changeset_map_t::const_iterator cs_itr = m_changesets.find(r.changeset_id);
-    if (cs_itr != m_changesets.end()) {
-      user_map_t::const_iterator user_itr = m_users.find(cs_itr->second);
-      if (user_itr != m_users.end()) {
-        m_impl->attribute("user", user_itr->second);
-        m_impl->attribute("uid", user_itr->first);
-      }
-    }
-
-    while ((rm_itr != rms.end()) && 
-           ((rm_itr->relation_id < r.id) ||
-            ((rm_itr->relation_id == r.id) &&
-             (rm_itr->version <= r.version)))) {
-      if ((rm_itr->relation_id == r.id) && (rm_itr->version == r.version)) {
-        m_impl->begin("member");
-        const char *type = 
-          (rm_itr->member_id == nwr_node) ? "node" :
-          (rm_itr->member_id == nwr_way) ? "way" :
-          "relation";
-        
-        m_impl->attribute("type", type);
-        m_impl->attribute("ref", rm_itr->member_id);
-        m_impl->attribute("role", rm_itr->member_role);
-        m_impl->end();
-      }
-      ++rm_itr;
-    }
-
-    while ((tag_itr != ts.end()) && 
-           ((tag_itr->element_id < r.id) ||
-            ((tag_itr->element_id == r.id) &&
-             (tag_itr->version <= r.version)))) {
-      if ((tag_itr->element_id == r.id) && (tag_itr->version == r.version)) {
-        m_impl->add_tag(*tag_itr);
-      }
-      ++tag_itr;
-    }
-
     m_impl->end();
   }
 }
