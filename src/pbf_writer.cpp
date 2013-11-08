@@ -343,7 +343,9 @@ void pbf_writer::nodes(const std::vector<node> &ns,
 
   BOOST_FOREACH(const node &n, ns) {
     m_impl->add_node(n);
-    
+
+    if (!n.visible) { continue; }
+
     while ((tag_itr != ts.end()) && 
            ((tag_itr->element_id < n.id) ||
             ((tag_itr->element_id == n.id) &&
@@ -364,6 +366,8 @@ void pbf_writer::ways(const std::vector<way> &ws,
 
   BOOST_FOREACH(const way &w, ws) {
     m_impl->add_way(w);
+
+    if (!w.visible) { continue; }
 
     while ((nd_itr != wns.end()) && 
            ((nd_itr->way_id < w.id) ||
@@ -395,6 +399,8 @@ void pbf_writer::relations(const std::vector<relation> &rs,
 
   BOOST_FOREACH(const relation &r, rs) {
     m_impl->add_relation(r);
+
+    if (!r.visible) { continue; }
 
     while ((rm_itr != rms.end()) && 
            ((rm_itr->relation_id < r.id) ||
