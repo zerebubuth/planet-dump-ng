@@ -20,7 +20,7 @@ namespace {
 struct string_table {
   typedef boost::unordered_map<std::string, int> string_map_t;
 
-  string_table() : m_strings(), m_indexed_strings(), m_next_id(1) {}
+  string_table() : m_strings(), m_indexed_strings(), m_next_id(1), m_approx_size(0) {}
 
   int operator()(const std::string &s) {
     string_map_t::iterator itr = m_strings.find(s);
@@ -29,6 +29,11 @@ struct string_table {
       ++m_next_id;
       m_strings.insert(std::make_pair(s, key));
       m_indexed_strings.push_back(s);
+      // keep track of approximate size - strings are stored as the bytes of
+      // the string, length prefixed with varint which should be 1 byte if
+      // the value is < 128, and more if it's more. OSM strings are generally
+      // limited to 255 unicode chars, so unlikely to be > 16k bytes.
+      m_approx_size += s.size() + (s.size() > 128 ? 2 : 1);
       return key;
 
     } else {
@@ -36,10 +41,13 @@ struct string_table {
     }
   }
 
+  size_t approx_size() const { return m_approx_size; }
+
   void clear() {
     m_strings.clear();
     m_indexed_strings.clear();
     m_next_id = 1;
+    m_approx_size = 0;
   }
 
   void write(OSMPBF::StringTable *st) const {
@@ -54,6 +62,7 @@ struct string_table {
   string_map_t m_strings;
   std::vector<std::string> m_indexed_strings;
   int m_next_id;
+  size_t m_approx_size;
 };
 
 } // anonymous namespace
@@ -117,7 +126,18 @@ struct pbf_writer::pimpl {
     using google::protobuf::io::GzipOutputStream;
 
     Blob blob;
-    blob.set_raw_size(message.ByteSize());
+    size_t uncompressed_size = message.ByteSize();
+    // sanity check - if we're about to violate the OSMPBF format rules
+    // then we'd rather stop than ship an invalid file.
+    if (uncompressed_size >= OSMPBF::max_uncompressed_blob_size) {
+      std::ostringstream ostr;
+      ostr << "Unable to write block of type " << type << ", uncompressed size " << uncompressed_size
+	   << " because it is larger than the maximum allowed " << OSMPBF::max_uncompressed_blob_size
+	   << "." << std::endl;
+      throw std::runtime_error(ostr.str());
+    }
+    blob.set_raw_size(uncompressed_size);
+
     std::string str;
     StringOutputStream string_stream(&str);
     GzipOutputStream::Options options;
@@ -132,7 +152,15 @@ struct pbf_writer::pimpl {
     BlobHeader blob_header;
     blob_header.set_type(type);
     blob_header.set_datasize(blob.ByteSize());
-    uint32_t bh_size = htonl(blob_header.ByteSize());
+
+    int blob_header_size = blob_header.ByteSize();
+    if (blob_header_size < 0) {
+      std::ostringstream ostr;
+      ostr << "Unable to write blob header size " << blob_header_size 
+	   << " because it will not correctly cast to uint32_t.";
+      throw std::runtime_error(ostr.str());
+    }
+    uint32_t bh_size = htonl(uint32_t(blob_header_size));
     out.write((char *)&bh_size, sizeof bh_size);
     out << blob_header.SerializeAsString();
     out << blob.SerializeAsString();
@@ -147,7 +175,9 @@ struct pbf_writer::pimpl {
 
     if ((m_current_element != type) || (num_elements >= 16000)) {
       m_est_pblock_size += pgroup->ByteSize();
-      bool new_block = (m_current_element != type) || (m_est_pblock_size >= m_byte_limit);
+      bool new_block = ((m_current_element != type) || 
+			((m_est_pblock_size + str_table.approx_size()) >= m_byte_limit));
+
       if (new_block) {
         str_table.write(pblock.mutable_stringtable());
         write_blob(pblock, "OSMData");
