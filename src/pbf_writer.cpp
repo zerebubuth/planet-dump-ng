@@ -134,7 +134,7 @@ struct pbf_writer::pimpl {
       ostr << "Unable to write block of type " << type << ", uncompressed size " << uncompressed_size
 	   << " because it is larger than the maximum allowed " << OSMPBF::max_uncompressed_blob_size
 	   << "." << std::endl;
-      throw std::runtime_error(ostr.str());
+      BOOST_THROW_EXCEPTION(std::runtime_error(ostr.str()));
     }
     blob.set_raw_size(uncompressed_size);
 
@@ -158,7 +158,7 @@ struct pbf_writer::pimpl {
       std::ostringstream ostr;
       ostr << "Unable to write blob header size " << blob_header_size 
 	   << " because it will not correctly cast to uint32_t.";
-      throw std::runtime_error(ostr.str());
+      BOOST_THROW_EXCEPTION(std::runtime_error(ostr.str()));
     }
     uint32_t bh_size = htonl(uint32_t(blob_header_size));
     out.write((char *)&bh_size, sizeof bh_size);
@@ -309,7 +309,7 @@ struct pbf_writer::pimpl {
       return OSMPBF::Relation::RELATION;
     }
 
-    throw std::runtime_error("Unknown nwr_enum value in member_type.");
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unknown nwr_enum value in member_type."));
   }
 
   void add_relation_member(const relation_member &rm) {
