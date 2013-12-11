@@ -303,6 +303,13 @@ void writer_thread(int thread_index,
 void join_all_but(size_t i, std::vector<boost::shared_ptr<boost::thread> > &threads) {
   for (size_t j = 0; j < threads.size(); ++j) {
     if ((j != i) && threads[j]->joinable()) {
+      // if the thread isn't ready to join for a second, then it is probably blocked
+      // on something - this is the exceptional path, so the likely case is that some
+      // thread has thrown an exception and the rest are waiting for it at the
+      // barrier.
+      if (!threads[j]->timed_join(boost::posix_time::time_duration(0, 0, 1))) {
+        threads[j]->interrupt();
+      }
       threads[j]->join();
     }
   }
