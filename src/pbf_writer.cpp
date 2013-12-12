@@ -88,7 +88,18 @@ struct pbf_writer::pimpl {
       m_est_pblock_size(0),
       m_history_format(history_format),
       m_user_map(user_map),
-      m_changeset_user_map() {
+      m_changeset_user_map(),
+      m_recheck_elements(int(element_RELATION) + 1) {
+
+    // different re-check limits per type so that we can better
+    // adapt to the different sizes of elements, and hit the
+    // byte limit without overflowing it.
+    m_recheck_elements[element_NULL] = 1;
+    m_recheck_elements[element_CHANGESET] = 1;
+    m_recheck_elements[element_NODE] = 16000;
+    m_recheck_elements[element_WAY] = 8000;
+    m_recheck_elements[element_RELATION] = 4000;
+
     write_header_block(now);
   }
 
@@ -173,7 +184,8 @@ struct pbf_writer::pimpl {
       m_current_element = type;
     }
 
-    if ((m_current_element != type) || (num_elements >= 16000)) {
+    if ((m_current_element != type) || 
+	(num_elements >= m_recheck_elements[m_current_element])) {
       m_est_pblock_size += pgroup->ByteSize();
       bool new_block = ((m_current_element != type) || 
 			((m_est_pblock_size + str_table.approx_size()) >= m_byte_limit));
@@ -345,6 +357,7 @@ struct pbf_writer::pimpl {
   bool m_history_format;
   user_map_t m_user_map;
   std::map<int64_t, int64_t> m_changeset_user_map;
+  std::vector<size_t> m_recheck_elements;
 
 private:
   // noncopyable

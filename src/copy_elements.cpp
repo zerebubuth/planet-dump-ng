@@ -175,7 +175,8 @@ struct db_reader<int> {
   db_reader(const std::string &) {}
 };
 
-#define BLOCK_SIZE (1048576)
+template <typename T> struct block_size_trait { static const size_t value = 1048576; };
+template <> struct block_size_trait<relation> { static const size_t value =   65536; };
 
 template <typename T> void zero_init(T &);
 template <typename T> int64_t id_of(const T &);
@@ -223,6 +224,8 @@ void extract_element(thread_writer<T> &writer) {
   typedef typename T::tag_type tag_type;
   typedef typename T::inner_type inner_type;
 
+  const size_t block_size = block_size_trait<T>::value;
+
   db_reader<T> element_reader(T::table_name());
   db_reader<tag_type> tag_reader(T::tag_table_name());
   db_reader<inner_type> inner_reader(T::inner_table_name());
@@ -231,7 +234,7 @@ void extract_element(thread_writer<T> &writer) {
   std::vector<tag_type> tags;
   std::vector<inner_type> inners;
   
-  elements.resize(BLOCK_SIZE);
+  elements.resize(block_size);
   size_t i = 0;
 
   tag_type current_tag;
@@ -249,12 +252,12 @@ void extract_element(thread_writer<T> &writer) {
     fetch_associated(current_tag, elements[i].id, version_of(elements[i]), tag_reader, tags);
 
     ++i;
-    if (i == BLOCK_SIZE) {
+    if (i == block_size) {
       writer.write(elements, inners, tags);
       inners.clear();
       tags.clear();
       i = 0;
-      if (elements.size() != BLOCK_SIZE) { elements.resize(BLOCK_SIZE); }
+      if (elements.size() != block_size) { elements.resize(block_size); }
     }
   }
 
@@ -282,6 +285,8 @@ void writer_thread(int thread_index,
                    boost::exception_ptr exc,
                    boost::shared_ptr<output_writer> writer, 
                    boost::shared_ptr<control_block<T> > blk) {
+  const size_t block_size = block_size_trait<T>::value;
+
   try {
     do {
       blk->pre_swap_barrier.wait();
@@ -289,10 +294,12 @@ void writer_thread(int thread_index,
       
       write_elements<T>(*writer, *blk);
       
-    } while (blk->elements.size() == BLOCK_SIZE);
+    } while (blk->elements.size() == block_size);
 
   } catch (...) {
     exc = boost::current_exception();
+    std::cerr << "EXCEPTION: writer_thread(" << thread_index << "): " 
+	      << boost::diagnostic_information(exc) << std::endl;
   }
 
   boost::lock_guard<boost::mutex> lock(blk->thread_finished_mutex);
@@ -301,16 +308,22 @@ void writer_thread(int thread_index,
 }
 
 void join_all_but(size_t i, std::vector<boost::shared_ptr<boost::thread> > &threads) {
-  for (size_t j = 0; j < threads.size(); ++j) {
-    if ((j != i) && threads[j]->joinable()) {
-      // if the thread isn't ready to join for a second, then it is probably blocked
-      // on something - this is the exceptional path, so the likely case is that some
-      // thread has thrown an exception and the rest are waiting for it at the
-      // barrier.
-      if (!threads[j]->timed_join(boost::posix_time::time_duration(0, 0, 1))) {
-        threads[j]->interrupt();
+  bool still_running = true;
+
+  while (still_running) {
+    still_running = false;
+
+    for (size_t j = 0; j < threads.size(); ++j) {
+      if ((j != i) && threads[j]->joinable()) {
+	// if the thread isn't ready to join for a second, then it is probably blocked
+	// on something - this is the exceptional path, so the likely case is that some
+	// thread has thrown an exception and the rest are waiting for it at the
+	// barrier.
+	if (!threads[j]->timed_join(boost::posix_time::time_duration(0, 0, 1))) {
+	  still_running = true;
+	  threads[j]->interrupt();
+	}
       }
-      threads[j]->join();
     }
   }
 }
@@ -338,6 +351,8 @@ void reader_thread(int thread_index,
 
   } catch (...) {
     exc = boost::current_exception();
+    std::cerr << "EXCEPTION: reader_thread(" << thread_index << "): " 
+	      << boost::diagnostic_information(exc) << std::endl;
   }
 
   boost::lock_guard<boost::mutex> lock(blk->thread_finished_mutex);
@@ -376,8 +391,10 @@ void run_threads(std::vector<boost::shared_ptr<output_writer> > writers) {
         --num_running_threads;
         
         if (exceptions[idx]) {
+	  lock.unlock();
           // interrupt all other threads and join them
           join_all_but(idx, threads);
+	  lock.lock();
           // re-throw the exception
           boost::rethrow_exception(exceptions[idx]);
         }
