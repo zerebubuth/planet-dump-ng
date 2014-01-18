@@ -16,6 +16,7 @@ include/config.h.in
 include/stamp-h1
 install-sh
 missing
+test-driver
 planet-dump-ng
 src/.deps
 src/Makefile
