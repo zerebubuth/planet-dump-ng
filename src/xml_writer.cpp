@@ -51,7 +51,7 @@ std::string kill_xml_bad_chars(const std::string &s) {
     }
     output[i] = c;
   }
-
+  
   return output;
 }
 
@@ -149,10 +149,9 @@ static int wrap_close(void *context) {
 }
 
 xml_writer::pimpl::pimpl(const std::string &file_name, const boost::program_options::variables_map &options, const pt::ptime &now, bool has_history) 
-  : m_command(popen_command(file_name, options)), 
-    m_out(popen(m_command.c_str(), "w")), m_writer(NULL), m_now(now),
-    m_has_history(has_history) {
-
+  : m_command(popen_command(file_name, options)), m_out(popen(m_command.c_str(), "w")), 
+    m_writer(NULL), m_now(now), m_has_history(has_history) {
+  
   if (m_out == NULL) {
     BOOST_THROW_EXCEPTION(std::runtime_error("Unable to popen compression command for output."));
   }
@@ -326,8 +325,7 @@ void write_tags(int64_t id, int64_t version,
 
 xml_writer::xml_writer(const std::string &file_name, const boost::program_options::variables_map &options,
                        const user_map_t &users, const pt::ptime &max_time, bool has_history)
-  : m_impl(new pimpl(file_name, options, max_time, has_history)),
-    m_users(users) {
+  : m_impl(new pimpl(file_name, options, max_time, has_history)), m_users(users) {
   m_impl->begin("osm");
   m_impl->attribute("license",     OSM_LICENSE_TEXT);
   m_impl->attribute("copyright",   OSM_COPYRIGHT_TEXT);

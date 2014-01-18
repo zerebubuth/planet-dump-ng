@@ -92,8 +92,7 @@ run_thread<R>::run_thread(std::string table_name_, std::string dump_file)
   : timestamp(), error(), 
     thr(&thread_extract_with_timestamp<R>,
         boost::ref(timestamp), boost::ref(error),
-        table_name_, dump_file),
-    table_name(table_name_) {
+        table_name_, dump_file), table_name(table_name_) {
 }
 
 template <typename R>

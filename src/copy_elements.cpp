@@ -299,7 +299,7 @@ void writer_thread(int thread_index,
   } catch (...) {
     exc = boost::current_exception();
     std::cerr << "EXCEPTION: writer_thread(" << thread_index << "): " 
-	      << boost::diagnostic_information(exc) << std::endl;
+              << boost::diagnostic_information(exc) << std::endl;
   }
 
   boost::lock_guard<boost::mutex> lock(blk->thread_finished_mutex);
@@ -315,14 +315,14 @@ void join_all_but(size_t i, std::vector<boost::shared_ptr<boost::thread> > &thre
 
     for (size_t j = 0; j < threads.size(); ++j) {
       if ((j != i) && threads[j]->joinable()) {
-	// if the thread isn't ready to join for a second, then it is probably blocked
-	// on something - this is the exceptional path, so the likely case is that some
-	// thread has thrown an exception and the rest are waiting for it at the
-	// barrier.
-	if (!threads[j]->timed_join(boost::posix_time::time_duration(0, 0, 1))) {
-	  still_running = true;
-	  threads[j]->interrupt();
-	}
+        // if the thread isn't ready to join for a second, then it is probably blocked
+        // on something - this is the exceptional path, so the likely case is that some
+        // thread has thrown an exception and the rest are waiting for it at the
+        // barrier.
+        if (!threads[j]->timed_join(boost::posix_time::time_duration(0, 0, 1))) {
+          still_running = true;
+          threads[j]->interrupt();
+        }
       }
     }
   }
@@ -352,7 +352,7 @@ void reader_thread(int thread_index,
   } catch (...) {
     exc = boost::current_exception();
     std::cerr << "EXCEPTION: reader_thread(" << thread_index << "): " 
-	      << boost::diagnostic_information(exc) << std::endl;
+              << boost::diagnostic_information(exc) << std::endl;
   }
 
   boost::lock_guard<boost::mutex> lock(blk->thread_finished_mutex);
@@ -391,10 +391,10 @@ void run_threads(std::vector<boost::shared_ptr<output_writer> > writers) {
         --num_running_threads;
         
         if (exceptions[idx]) {
-	  lock.unlock();
+          lock.unlock();
           // interrupt all other threads and join them
           join_all_but(idx, threads);
-	  lock.lock();
+          lock.lock();
           // re-throw the exception
           boost::rethrow_exception(exceptions[idx]);
         }

@@ -143,8 +143,8 @@ struct pbf_writer::pimpl {
     if (uncompressed_size >= OSMPBF::max_uncompressed_blob_size) {
       std::ostringstream ostr;
       ostr << "Unable to write block of type " << type << ", uncompressed size " << uncompressed_size
-	   << " because it is larger than the maximum allowed " << OSMPBF::max_uncompressed_blob_size
-	   << "." << std::endl;
+           << " because it is larger than the maximum allowed " << OSMPBF::max_uncompressed_blob_size
+           << "." << std::endl;
       BOOST_THROW_EXCEPTION(std::runtime_error(ostr.str()));
     }
     blob.set_raw_size(uncompressed_size);
@@ -168,7 +168,7 @@ struct pbf_writer::pimpl {
     if (blob_header_size < 0) {
       std::ostringstream ostr;
       ostr << "Unable to write blob header size " << blob_header_size 
-	   << " because it will not correctly cast to uint32_t.";
+           << " because it will not correctly cast to uint32_t.";
       BOOST_THROW_EXCEPTION(std::runtime_error(ostr.str()));
     }
     uint32_t bh_size = htonl(uint32_t(blob_header_size));
@@ -185,10 +185,10 @@ struct pbf_writer::pimpl {
     }
 
     if ((m_current_element != type) || 
-	(num_elements >= m_recheck_elements[m_current_element])) {
+        (num_elements >= m_recheck_elements[m_current_element])) {
       m_est_pblock_size += pgroup->ByteSize();
       bool new_block = ((m_current_element != type) || 
-			((m_est_pblock_size + str_table.approx_size()) >= m_byte_limit));
+                        ((m_est_pblock_size + str_table.approx_size()) >= m_byte_limit));
 
       if (new_block) {
         str_table.write(pblock.mutable_stringtable());

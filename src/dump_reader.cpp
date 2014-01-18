@@ -175,12 +175,12 @@ template <typename T>
 struct filter_copy_contents 
   : public boost::noncopyable {
   explicit filter_copy_contents(T &source, const std::string &table_name) 
-  : m_source(source),
-    m_in_copy(false),
-    m_start_prefix("COPY "),
-    m_end_line("\\."),
-    m_grammar(table_name),
-    m_table_name(table_name) {
+    : m_source(source),
+      m_in_copy(false),
+      m_start_prefix("COPY "),
+      m_end_line("\\."),
+      m_grammar(table_name),
+      m_table_name(table_name) {
   }
 
   ~filter_copy_contents() {
