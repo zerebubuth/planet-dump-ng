@@ -33,6 +33,7 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
     ("history-xml,X", po::value<std::string>(), "history XML output file")
     ("pbf,p", po::value<std::string>(), "planet PBF output file (without history)")
     ("history-pbf,P", po::value<std::string>(), "history PBF output file")
+    ("dense-nodes,d", po::value<bool>()->default_value("true"), "use dense nodes for PBF output")
     ("dump-file,f", po::value<std::string>(), "PostgreSQL table dump to read")
     ;
 
@@ -57,7 +58,7 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
 
 /**
  * read the dump file in parallel to get all of the elements into leveldb
- * databases. this is primarily so tha the data is sorted, which is not
+ * databases. this is primarily so that the data is sorted, which is not
  * guaranteed in the PostgreSQL dump file. returns the maximum time seen
  * in a timestamp of any element in the dump file.
  */
