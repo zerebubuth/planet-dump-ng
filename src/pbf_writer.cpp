@@ -291,9 +291,10 @@ struct pbf_writer::pimpl {
     info->add_version(n.version);
     info->add_timestamp(delta(m_last_dense_timestamp, int64_t((n.timestamp - epoch).total_seconds())));
     info->add_changeset(delta(m_last_dense_changeset, n.changeset_id));
-    // if we are doing a history file, and the default of visible=true
-    // doesn't apply, then we need to explicitly set visible=false.
-    if (m_history_format && !n.visible) {
+    // if we are doing a history file, we need to set the visible flag
+    // for all entries in the dense node table, as this array is indexed
+    // into by position to get the visibility flag.
+    if (m_history_format) {
       info->add_visible(n.visible);
     }
     // set the uid and user information, if the user is public
