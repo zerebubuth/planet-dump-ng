@@ -18,7 +18,7 @@ PKG_CHECK_MODULES(LIBXML, libxml-2.0 >= 2.6.31)
 AC_SUBST(LIBXML_CFLAGS)
 AC_SUBST(LIBXML_LIBS)
 
-AX_BOOST_BASE([1.43], , [AC_MSG_ERROR([Boost libraries are required for building CGImap. Please install libboost-dev.])])
+AX_BOOST_BASE([1.43], , [AC_MSG_ERROR([Boost libraries are required for building planet-dump-ng. Please install libboost-dev.])])
 AX_BOOST_SYSTEM
 AX_BOOST_FILESYSTEM
 AX_BOOST_PROGRAM_OPTIONS
