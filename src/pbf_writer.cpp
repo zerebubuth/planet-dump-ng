@@ -1,7 +1,6 @@
 #include "pbf_writer.hpp"
 #include "config.h"
 #include "writer_common.hpp"
-#include "delta.hpp"
 
 #include <google/protobuf/io/gzip_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl_lite.h>
@@ -65,6 +64,16 @@ struct string_table {
   int m_next_id;
   size_t m_approx_size;
 };
+
+// simple function to calculate the delta between the last value of
+// something and the current value, returning the difference and
+// updating the last value.
+template <typename T>
+inline T delta(T &last, T cur) {
+  T d = cur - last;
+  last = cur;
+  return d;
+}
 
 } // anonymous namespace
 
@@ -206,13 +215,13 @@ struct pbf_writer::pimpl {
         m_est_pblock_size = 0;
       }
 
-      m_delta_id.clear();
-      m_delta_lat.clear();
-      m_delta_lon.clear();
-      m_delta_timestamp.clear();
-      m_delta_changeset.clear();
-      m_delta_uid.clear();
-      m_delta_user_sid.clear();
+      m_last_dense_id = 0;
+      m_last_dense_lat = 0;
+      m_last_dense_lon = 0;
+      m_last_dense_timestamp = 0;
+      m_last_dense_changeset = 0;
+      m_last_dense_uid = 0;
+      m_last_dense_user_sid = 0;
       pgroup = pblock.add_primitivegroup();
       num_elements = 0;
       current_node = NULL;
@@ -275,13 +284,13 @@ struct pbf_writer::pimpl {
     static bt::ptime epoch = bt::from_time_t(time_t(0));
     current_node = NULL;
     m_dense_section = pgroup->mutable_dense();
-    m_dense_section->add_id(m_delta_id.update(n.id));
-    m_dense_section->add_lon(m_delta_lon.update(n.visible ? n.longitude : 0));
-    m_dense_section->add_lat(m_delta_lat.update(n.visible ? n.latitude : 0));
+    m_dense_section->add_id(delta(m_last_dense_id, n.id));
+    m_dense_section->add_lon(delta(m_last_dense_lon, int64_t(n.visible ? n.longitude : 0)));
+    m_dense_section->add_lat(delta(m_last_dense_lat, int64_t(n.visible ? n.latitude : 0)));
     OSMPBF::DenseInfo* info = m_dense_section->mutable_denseinfo();
     info->add_version(n.version);
-    info->add_timestamp(m_delta_timestamp.update((n.timestamp - epoch).total_seconds()));
-    info->add_changeset(m_delta_changeset.update(n.changeset_id));
+    info->add_timestamp(delta(m_last_dense_timestamp, int64_t((n.timestamp - epoch).total_seconds())));
+    info->add_changeset(delta(m_last_dense_changeset, n.changeset_id));
     // if we are doing a history file, and the default of visible=true
     // doesn't apply, then we need to explicitly set visible=false.
     if (m_history_format && !n.visible) {
@@ -292,14 +301,14 @@ struct pbf_writer::pimpl {
     if (itr != m_changeset_user_map.end()) {
       user_map_t::const_iterator jtr = m_user_map.find(itr->second);
       if (jtr != m_user_map.end()) {
-        info->add_uid(m_delta_uid.update(jtr->first));
-        info->add_user_sid(m_delta_user_sid.update(str_table(jtr->second)));
+        info->add_uid(delta(m_last_dense_uid, jtr->first));
+        info->add_user_sid(delta(m_last_dense_user_sid, str_table(jtr->second)));
       }
       else
       {
         // anonymous
-        info->add_uid(m_delta_uid.update(-1));
-        info->add_user_sid(m_delta_user_sid.update(str_table("")));
+        info->add_uid(delta(m_last_dense_uid, int64_t(-1)));
+        info->add_user_sid(delta(m_last_dense_user_sid, str_table("")));
       }
     } else {
       // should this throw an exception?
@@ -424,13 +433,13 @@ struct pbf_writer::pimpl {
   std::map<int64_t, int64_t> m_changeset_user_map;
   std::vector<size_t> m_recheck_elements;
 
-  Delta<int64_t> m_delta_id;
-  Delta<int64_t> m_delta_lat;
-  Delta<int64_t> m_delta_lon;
-  Delta<int64_t> m_delta_timestamp;
-  Delta<int64_t> m_delta_changeset;
-  Delta<int64_t> m_delta_uid;
-  Delta<uint32_t> m_delta_user_sid;
+  int64_t m_last_dense_id;
+  int64_t m_last_dense_lat;
+  int64_t m_last_dense_lon;
+  int64_t m_last_dense_timestamp;
+  int64_t m_last_dense_changeset;
+  int64_t m_last_dense_uid;
+  int m_last_dense_user_sid;
 
 
 
