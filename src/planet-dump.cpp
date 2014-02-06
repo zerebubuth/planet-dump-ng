@@ -4,6 +4,7 @@
 #include "xml_writer.hpp"
 #include "pbf_writer.hpp"
 #include "history_filter.hpp"
+#include "changeset_filter.hpp"
 #include "config.h"
 
 #include <boost/shared_ptr.hpp>
@@ -33,6 +34,7 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
     ("history-xml,X", po::value<std::string>(), "history XML output file")
     ("pbf,p", po::value<std::string>(), "planet PBF output file (without history)")
     ("history-pbf,P", po::value<std::string>(), "history PBF output file")
+    ("changesets,C", po::value<std::string>(), "changeset XML output file")
     ("dump-file,f", po::value<std::string>(), "PostgreSQL table dump to read")
     ;
 
@@ -49,9 +51,11 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
   }
 
   if ((vm.count("xml") + vm.count("history-xml") +
-       vm.count("pbf") + vm.count("history-pbf")) == 0) {
+       vm.count("pbf") + vm.count("history-pbf") + 
+       vm.count("changesets")) == 0) {
     BOOST_THROW_EXCEPTION(std::runtime_error("No output file provided! You must provide one or more of "
-                                             "--xml, --history-xml, --pbf or --history-pbf to get output."));
+                                             "--xml, --history-xml, --pbf, --history-pbf or --changesets "
+                                             "to get output."));
   }
 }
 
@@ -126,6 +130,10 @@ int main(int argc, char *argv[]) {
     if (options.count("pbf")) {
       std::string output_file = options["pbf"].as<std::string>();
       writers.push_back(boost::shared_ptr<output_writer>(new history_filter<pbf_writer>(output_file, options, display_name_map, max_time)));
+    }
+    if (options.count("changesets")) {
+      std::string output_file = options["changesets"].as<std::string>();
+      writers.push_back(boost::shared_ptr<output_writer>(new changeset_filter<xml_writer>(output_file, options, display_name_map, max_time)));
     }
 
     std::cerr << "Writing changesets..." << std::endl;
