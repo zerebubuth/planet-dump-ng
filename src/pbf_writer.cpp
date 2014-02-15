@@ -272,7 +272,9 @@ struct pbf_writer::pimpl {
     ASSERT_EQ(num_ids, num_versions);
     ASSERT_EQ(num_ids, num_timestamps);
     ASSERT_EQ(num_ids, num_changesets);
-    ASSERT_EQ(num_ids, num_visibles);
+    if (m_history_format) {
+      ASSERT_EQ(num_ids, num_visibles);
+    }
     ASSERT_EQ(num_ids, num_uids);
     ASSERT_EQ(num_ids, num_user_sids);
   }
