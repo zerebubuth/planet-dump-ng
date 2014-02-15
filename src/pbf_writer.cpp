@@ -13,6 +13,19 @@
 #include <arpa/inet.h>
 #include <fstream>
 
+#define ASSERT_EQ(a, b) { if ((a) != (b)) {		    \
+      std::ostringstream out;				    \
+      out << "Assertion " #a " == " #b " failed, ";	    \
+      out << (a) << " != " << (b) << ".";		    \
+      BOOST_THROW_EXCEPTION(std::runtime_error(out.str())); \
+    } }
+#define ASSERT_NOT_NULL(a) { if ((a) == NULL) {		    \
+      std::ostringstream out;				    \
+      out << "Assertion " #a " != NULL failed, ";	    \
+      out << (a) << " is NULL.";			    \
+      BOOST_THROW_EXCEPTION(std::runtime_error(out.str())); \
+    } }
+
 namespace bt = boost::posix_time;
 
 namespace {
@@ -207,6 +220,13 @@ struct pbf_writer::pimpl {
 
       if (new_block) {
         str_table.write(pblock.mutable_stringtable());
+
+	// before writing, check that, if we have dense nodes, we have the
+	// same number of entries for all the arrays.
+	if (m_dense_nodes && (m_dense_section != NULL)) {
+	  check_dense_node_arrays();
+	}
+
         write_blob(pblock, "OSMData");
         pblock.Clear();
         str_table.clear();
@@ -230,6 +250,33 @@ struct pbf_writer::pimpl {
     }
   }
 
+  void check_dense_node_arrays() {
+    ASSERT_EQ(m_dense_nodes, true);
+    ASSERT_NOT_NULL(m_dense_section);
+
+    OSMPBF::DenseInfo *info = m_dense_section->mutable_denseinfo();
+    assert(info != NULL);
+
+    int num_ids = m_dense_section->id_size();
+    int num_lons = m_dense_section->lon_size();
+    int num_lats = m_dense_section->lat_size();
+    int num_versions = info->version_size();
+    int num_timestamps = info->timestamp_size();
+    int num_changesets = info->changeset_size();
+    int num_visibles = info->visible_size();
+    int num_uids = info->uid_size();
+    int num_user_sids = info->user_sid_size();
+
+    ASSERT_EQ(num_ids, num_lons);
+    ASSERT_EQ(num_ids, num_lats);
+    ASSERT_EQ(num_ids, num_versions);
+    ASSERT_EQ(num_ids, num_timestamps);
+    ASSERT_EQ(num_ids, num_changesets);
+    ASSERT_EQ(num_ids, num_visibles);
+    ASSERT_EQ(num_ids, num_uids);
+    ASSERT_EQ(num_ids, num_user_sids);
+  }
+
   template <typename T>
   void set_info(const T &t, OSMPBF::Info *info) {
     static bt::ptime epoch = bt::from_time_t(time_t(0));
@@ -250,6 +297,12 @@ struct pbf_writer::pimpl {
         info->set_uid(jtr->first);
         info->set_user_sid(str_table(jtr->second));
       }
+      // for anonymous, just leave the uid & user_sid blank.
+    } else {
+      std::ostringstream out;
+      out << "Unable to find changeset " << t.changeset_id 
+	  << " in changeset-to-user map.";
+      BOOST_THROW_EXCEPTION(std::runtime_error(out.str()));
     }
   }
 
@@ -312,7 +365,10 @@ struct pbf_writer::pimpl {
         info->add_user_sid(delta(m_last_dense_user_sid, str_table("")));
       }
     } else {
-      // should this throw an exception?
+      std::ostringstream out;
+      out << "Unable to find changeset " << n.changeset_id 
+	  << " in changeset-to-user map for dense node.";
+      BOOST_THROW_EXCEPTION(std::runtime_error(out.str()));
     }
     ++num_elements;
   }
