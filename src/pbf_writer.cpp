@@ -13,16 +13,16 @@
 #include <arpa/inet.h>
 #include <fstream>
 
-#define ASSERT_EQ(a, b) { if ((a) != (b)) {		    \
-      std::ostringstream out;				    \
-      out << "Assertion " #a " == " #b " failed, ";	    \
-      out << (a) << " != " << (b) << ".";		    \
+#define ASSERT_EQ(a, b) { if ((a) != (b)) {                 \
+      std::ostringstream out;                               \
+      out << "Assertion " #a " == " #b " failed, ";         \
+      out << (a) << " != " << (b) << ".";                   \
       BOOST_THROW_EXCEPTION(std::runtime_error(out.str())); \
     } }
-#define ASSERT_NOT_NULL(a) { if ((a) == NULL) {		    \
-      std::ostringstream out;				    \
-      out << "Assertion " #a " != NULL failed, ";	    \
-      out << (a) << " is NULL.";			    \
+#define ASSERT_NOT_NULL(a) { if ((a) == NULL) {             \
+      std::ostringstream out;                               \
+      out << "Assertion " #a " != NULL failed, ";           \
+      out << (a) << " is NULL.";                            \
       BOOST_THROW_EXCEPTION(std::runtime_error(out.str())); \
     } }
 
@@ -221,11 +221,11 @@ struct pbf_writer::pimpl {
       if (new_block) {
         str_table.write(pblock.mutable_stringtable());
 
-	// before writing, check that, if we have dense nodes, we have the
-	// same number of entries for all the arrays.
-	if (m_dense_nodes && (m_dense_section != NULL)) {
-	  check_dense_node_arrays();
-	}
+        // before writing, check that, if we have dense nodes, we have the
+        // same number of entries for all the arrays.
+        if (m_dense_nodes && (m_dense_section != NULL)) {
+          check_dense_node_arrays();
+        }
 
         write_blob(pblock, "OSMData");
         pblock.Clear();
@@ -303,7 +303,7 @@ struct pbf_writer::pimpl {
     } else {
       std::ostringstream out;
       out << "Unable to find changeset " << t.changeset_id 
-	  << " in changeset-to-user map.";
+          << " in changeset-to-user map.";
       BOOST_THROW_EXCEPTION(std::runtime_error(out.str()));
     }
   }
@@ -371,7 +371,7 @@ struct pbf_writer::pimpl {
     } else {
       std::ostringstream out;
       out << "Unable to find changeset " << n.changeset_id 
-	  << " in changeset-to-user map for dense node.";
+          << " in changeset-to-user map for dense node.";
       BOOST_THROW_EXCEPTION(std::runtime_error(out.str()));
     }
     ++num_elements;
