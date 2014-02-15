@@ -362,8 +362,10 @@ struct pbf_writer::pimpl {
       }
       else
       {
-        // anonymous
-        info->add_uid(delta(m_last_dense_uid, int64_t(-1)));
+        // anonymous user - note that the array requires a value, but
+        // it doesn't appear to be documented anywhere what the "null"
+        // value should be. apparently -1 is no good, so use 0.
+        info->add_uid(delta(m_last_dense_uid, int64_t(0)));
         info->add_user_sid(delta(m_last_dense_user_sid, str_table("")));
       }
     } else {
