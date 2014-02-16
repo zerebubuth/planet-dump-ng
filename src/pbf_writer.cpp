@@ -255,7 +255,7 @@ struct pbf_writer::pimpl {
     ASSERT_NOT_NULL(m_dense_section);
 
     OSMPBF::DenseInfo *info = m_dense_section->mutable_denseinfo();
-    assert(info != NULL);
+    ASSERT_NOT_NULL(info);
 
     int num_ids = m_dense_section->id_size();
     int num_lons = m_dense_section->lon_size();
