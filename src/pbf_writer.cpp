@@ -102,7 +102,7 @@ struct pbf_writer::pimpl {
   pimpl(const std::string &out_name, const bt::ptime &now, bool history_format,
         const user_map_t &user_map, const boost::program_options::variables_map &options) 
     : num_elements(0), buffer(), out(out_name.c_str()), str_table(),
-      pblock(), m_dense_section(), pgroup(pblock.add_primitivegroup()), 
+      pblock(), pgroup(pblock.add_primitivegroup()), 
       current_node(NULL), current_way(NULL), current_relation(NULL),
       m_byte_limit(int(0.25 * OSMPBF::max_uncompressed_blob_size)),
       m_current_element(element_NULL),
@@ -111,6 +111,8 @@ struct pbf_writer::pimpl {
       m_est_pblock_size(0),
       m_history_format(history_format),
       m_user_map(user_map),
+      m_dense_nodes(options["dense-nodes"].as<bool>()),
+      m_dense_section(NULL), 
       m_changeset_user_map(),
       m_recheck_elements(int(element_RELATION) + 1) {
 
@@ -123,7 +125,6 @@ struct pbf_writer::pimpl {
     m_recheck_elements[element_WAY] = 8000;
     m_recheck_elements[element_RELATION] = 2000;
 
-    m_dense_nodes = options["dense-nodes"].as<bool>();
     reset_dense_ids();
 
     write_header_block(now);
@@ -226,8 +227,12 @@ struct pbf_writer::pimpl {
     if ((m_current_element != type) || 
         (num_elements >= m_recheck_elements[m_current_element])) {
       m_est_pblock_size += pgroup->ByteSize();
+      size_t str_table_size = str_table.approx_size();
+      if ((size_t(m_est_pblock_size) + str_table_size) > size_t(std::numeric_limits<int>::max())) {
+        BOOST_THROW_EXCEPTION(std::runtime_error("Pblock + string table got too big."));
+      }
       bool new_block = ((m_current_element != type) || 
-                        ((m_est_pblock_size + str_table.approx_size()) >= m_byte_limit));
+                        ((m_est_pblock_size + int(str_table_size)) >= m_byte_limit));
 
       if (new_block) {
         str_table.write(pblock.mutable_stringtable());
