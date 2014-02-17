@@ -124,11 +124,22 @@ struct pbf_writer::pimpl {
     m_recheck_elements[element_RELATION] = 2000;
 
     m_dense_nodes = options["dense-nodes"].as<bool>();
+    reset_dense_ids();
 
     write_header_block(now);
   }
 
   ~pimpl() {
+  }
+
+  void reset_dense_ids() {
+    m_last_dense_id = 0;
+    m_last_dense_lat = 0;
+    m_last_dense_lon = 0;
+    m_last_dense_timestamp = 0;
+    m_last_dense_changeset = 0;
+    m_last_dense_uid = 0;
+    m_last_dense_user_sid = 0;
   }
 
   void write_header_block(const bt::ptime &now) {
@@ -235,13 +246,7 @@ struct pbf_writer::pimpl {
         m_est_pblock_size = 0;
       }
 
-      m_last_dense_id = 0;
-      m_last_dense_lat = 0;
-      m_last_dense_lon = 0;
-      m_last_dense_timestamp = 0;
-      m_last_dense_changeset = 0;
-      m_last_dense_uid = 0;
-      m_last_dense_user_sid = 0;
+      reset_dense_ids();
       pgroup = pblock.add_primitivegroup();
       num_elements = 0;
       current_node = NULL;
@@ -250,22 +255,22 @@ struct pbf_writer::pimpl {
     }
   }
 
-  void check_dense_node_arrays() {
+  void check_dense_node_arrays() const {
     ASSERT_EQ(m_dense_nodes, true);
     ASSERT_NOT_NULL(m_dense_section);
 
-    OSMPBF::DenseInfo *info = m_dense_section->mutable_denseinfo();
+    const OSMPBF::DenseInfo *info = m_dense_section->mutable_denseinfo();
     ASSERT_NOT_NULL(info);
 
-    int num_ids = m_dense_section->id_size();
-    int num_lons = m_dense_section->lon_size();
-    int num_lats = m_dense_section->lat_size();
-    int num_versions = info->version_size();
-    int num_timestamps = info->timestamp_size();
-    int num_changesets = info->changeset_size();
-    int num_visibles = info->visible_size();
-    int num_uids = info->uid_size();
-    int num_user_sids = info->user_sid_size();
+    const int num_ids = m_dense_section->id_size();
+    const int num_lons = m_dense_section->lon_size();
+    const int num_lats = m_dense_section->lat_size();
+    const int num_versions = info->version_size();
+    const int num_timestamps = info->timestamp_size();
+    const int num_changesets = info->changeset_size();
+    const int num_visibles = info->visible_size();
+    const int num_uids = info->uid_size();
+    const int num_user_sids = info->user_sid_size();
 
     ASSERT_EQ(num_ids, num_lons);
     ASSERT_EQ(num_ids, num_lats);
@@ -339,13 +344,13 @@ struct pbf_writer::pimpl {
     static bt::ptime epoch = bt::from_time_t(time_t(0));
     current_node = NULL;
     m_dense_section = pgroup->mutable_dense();
-    m_dense_section->add_id(delta(m_last_dense_id, n.id));
-    m_dense_section->add_lon(delta(m_last_dense_lon, int64_t(n.visible ? n.longitude : 0)));
-    m_dense_section->add_lat(delta(m_last_dense_lat, int64_t(n.visible ? n.latitude : 0)));
+    m_dense_section->add_id(delta<int64_t>(m_last_dense_id, n.id));
+    m_dense_section->add_lon(delta<int64_t>(m_last_dense_lon, n.visible ? n.longitude : 0));
+    m_dense_section->add_lat(delta<int64_t>(m_last_dense_lat, n.visible ? n.latitude : 0));
     OSMPBF::DenseInfo* info = m_dense_section->mutable_denseinfo();
     info->add_version(n.version);
-    info->add_timestamp(delta(m_last_dense_timestamp, int64_t((n.timestamp - epoch).total_seconds())));
-    info->add_changeset(delta(m_last_dense_changeset, n.changeset_id));
+    info->add_timestamp(delta<int64_t>(m_last_dense_timestamp, (n.timestamp - epoch).total_seconds()));
+    info->add_changeset(delta<int64_t>(m_last_dense_changeset, n.changeset_id));
     // if we are doing a history file, we need to set the visible flag
     // for all entries in the dense node table, as this array is indexed
     // into by position to get the visibility flag.
@@ -357,16 +362,16 @@ struct pbf_writer::pimpl {
     if (itr != m_changeset_user_map.end()) {
       user_map_t::const_iterator jtr = m_user_map.find(itr->second);
       if (jtr != m_user_map.end()) {
-        info->add_uid(delta(m_last_dense_uid, jtr->first));
-        info->add_user_sid(delta(m_last_dense_user_sid, str_table(jtr->second)));
+        info->add_uid(delta<int32_t>(m_last_dense_uid, jtr->first));
+        info->add_user_sid(delta<int32_t>(m_last_dense_user_sid, str_table(jtr->second)));
       }
       else
       {
         // anonymous user - note that the array requires a value, but
         // it doesn't appear to be documented anywhere what the "null"
         // value should be. apparently -1 is no good, so use 0.
-        info->add_uid(delta(m_last_dense_uid, int64_t(0)));
-        info->add_user_sid(delta(m_last_dense_user_sid, str_table("")));
+        info->add_uid(delta<int32_t>(m_last_dense_uid, 0));
+        info->add_user_sid(delta<int32_t>(m_last_dense_user_sid, str_table("")));
       }
     } else {
       std::ostringstream out;
@@ -499,10 +504,8 @@ struct pbf_writer::pimpl {
   int64_t m_last_dense_lon;
   int64_t m_last_dense_timestamp;
   int64_t m_last_dense_changeset;
-  int64_t m_last_dense_uid;
-  int m_last_dense_user_sid;
-
-
+  int32_t m_last_dense_uid;
+  int32_t m_last_dense_user_sid;
 
 private:
   
