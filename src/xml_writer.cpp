@@ -338,7 +338,7 @@ void write_common_attributes(const T &t, xml_writer::pimpl &impl,
   
   xml_writer::changeset_map_t::const_iterator cs_itr = changesets.find(t.changeset_id);
   if (cs_itr != changesets.end()) {
-    xml_writer::user_map_t::const_iterator user_itr = users.find(cs_itr->second);
+    xml_writer::user_map_t::const_iterator user_itr = users.find(*cs_itr);
     if (user_itr != users.end()) {
       impl.attribute("user", user_itr->second);
       impl.attribute("uid", user_itr->first);
