@@ -511,8 +511,8 @@ void xml_writer::relations(const std::vector<relation> &rs,
         if ((rm_itr->relation_id == r.id) && (rm_itr->version == r.version)) {
           m_impl->begin("member");
           const char *type = 
-            (rm_itr->member_id == nwr_node) ? "node" :
-            (rm_itr->member_id == nwr_way) ? "way" :
+            (rm_itr->member_type == nwr_node) ? "node" :
+            (rm_itr->member_type == nwr_way) ? "way" :
             "relation";
           
           m_impl->attribute("type", type);
