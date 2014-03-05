@@ -12,6 +12,7 @@ bin_PROGRAMS=../planet-dump-ng
 ################################################################################
 ___planet_dump_ng_SOURCES=\
 	changeset_filter.cpp \
+	changeset_map.cpp \
 	copy_elements.cpp \
 	dump_archive.cpp \
 	dump_reader.cpp \

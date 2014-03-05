@@ -2,6 +2,7 @@
 #define XML_WRITER_HPP
 
 #include "output_writer.hpp"
+#include "changeset_map.hpp"
 #include <ostream>
 #include <boost/scoped_ptr.hpp>
 #include <boost/date_time/posix_time/ptime.hpp>
@@ -11,7 +12,7 @@
 
 class xml_writer : public output_writer {
 public:
-  typedef std::map<int64_t, int64_t> changeset_map_t;
+  typedef changeset_map changeset_map_t;
 
   xml_writer(const std::string &, const boost::program_options::variables_map &, const user_map_t &, const boost::posix_time::ptime &, bool = false);
   virtual ~xml_writer();

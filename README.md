@@ -22,6 +22,7 @@ Before building the code, you will need:
 * libosmpbf (version 1.3.0 recommended),
 * leveldb (version 1.9.0 recommended),
 * libprotobuf and libprotobuf-lite (version 2.4.1 recommended)
+* libsnappy
 
 To install these on Ubuntu, you can just type:
 
@@ -30,7 +31,7 @@ To install these on Ubuntu, you can just type:
 	  libboost-date-time-dev libboost-filesystem-dev \
 	  libboost-thread-dev libboost-iostreams-dev \
 	  libosmpbf-dev osmpbf-bin libleveldb-dev \
-	  libprotobuf-dev pkg-config
+      libsnappy-dev libprotobuf-dev pkg-config
 
 After that, it should just be a matter of running:
 

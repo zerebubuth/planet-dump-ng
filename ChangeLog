@@ -1,0 +1,5 @@
+2014-02-06  Matt Amos  <matt@faraday>
+
+	* src/pbf_writer.cpp (pimpl::add_dense_node): Frederik (@woodpeck)
+	added dense nodes support to the PBF writer.
+

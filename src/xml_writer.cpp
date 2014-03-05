@@ -78,6 +78,50 @@ std::string popen_command(const std::string &file_name, const boost::program_opt
   return command.str();
 }
 
+// profiling revealed that conversion to a time was a hotspot in the
+// code - not the conversion itself, but the allocation and setup of
+// the locale objects used to do the formatting. since we want an
+// ISO standard string, in zulu time, always then we don't need any
+// of that overhead.
+std::string fmt_iso_time(const pt::ptime &t) {
+  std::string s;
+  if (!t.is_special()) {
+    //           00000000001111111111
+    //           01234567890123456789
+    // format is YYYY-mm-ddTHH:MM:SSZ
+    s.resize(21);
+
+    const boost::gregorian::greg_year_month_day ymd = t.date().year_month_day();
+    const pt::time_duration tod = t.time_of_day();
+    const long hour = tod.hours();
+    const long minute = tod.minutes();
+    const long second = tod.seconds();
+
+    s[ 0] = '0' + ((ymd.year / 1000) % 10);
+    s[ 1] = '0' + ((ymd.year /  100) % 10);
+    s[ 2] = '0' + ((ymd.year /   10) % 10);
+    s[ 3] = '0' + ((ymd.year       ) % 10);
+    s[ 4] = '-';
+    s[ 5] = (ymd.month >= 10) ? '1' : '0';
+    s[ 6] = '0' + (ymd.month % 10);
+    s[ 7] = '-';
+    s[ 8] = '0' + ((ymd.day / 10) % 10);
+    s[ 9] = '0' + (ymd.day % 10);
+    s[10] = 'T';
+    s[11] = '0' + ((hour / 10) % 10);
+    s[12] = '0' + (hour % 10);
+    s[13] = ':';
+    s[14] = '0' + ((minute / 10) % 10);
+    s[15] = '0' + (minute % 10);
+    s[16] = ':';
+    s[17] = '0' + ((second / 10) % 10);
+    s[18] = '0' + (second % 10);
+    s[19] = 'Z';
+    s[20] = '\0';
+  }
+  return s;
+}
+
 } // anonymous namespace
 
 struct xml_writer::pimpl {
@@ -230,7 +274,7 @@ void xml_writer::pimpl::attribute(const char *name, double d) {
 }
 
 void xml_writer::pimpl::attribute(const char *name, const pt::ptime &t) {
-  std::string ts = pt::to_iso_extended_string(t) + "Z";
+  std::string ts = fmt_iso_time(t);
   if (xmlTextWriterWriteAttribute(m_writer, 
                                   BAD_CAST name,
                                   BAD_CAST ts.c_str()) < 0) {
@@ -294,7 +338,7 @@ void write_common_attributes(const T &t, xml_writer::pimpl &impl,
   
   xml_writer::changeset_map_t::const_iterator cs_itr = changesets.find(t.changeset_id);
   if (cs_itr != changesets.end()) {
-    xml_writer::user_map_t::const_iterator user_itr = users.find(cs_itr->second);
+    xml_writer::user_map_t::const_iterator user_itr = users.find(*cs_itr);
     if (user_itr != users.end()) {
       impl.attribute("user", user_itr->second);
       impl.attribute("uid", user_itr->first);
@@ -467,8 +511,8 @@ void xml_writer::relations(const std::vector<relation> &rs,
         if ((rm_itr->relation_id == r.id) && (rm_itr->version == r.version)) {
           m_impl->begin("member");
           const char *type = 
-            (rm_itr->member_id == nwr_node) ? "node" :
-            (rm_itr->member_id == nwr_way) ? "way" :
+            (rm_itr->member_type == nwr_node) ? "node" :
+            (rm_itr->member_type == nwr_way) ? "way" :
             "relation";
           
           m_impl->attribute("type", type);
