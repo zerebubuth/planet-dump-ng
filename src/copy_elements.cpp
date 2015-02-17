@@ -45,12 +45,12 @@ struct control_block {
   control_block(unsigned int num_threads)
   : pre_swap_barrier(num_threads),
     post_swap_barrier(num_threads),
-    thread_finished_index(-1) {
+    thread_status(num_threads, 0) {
   }
 
   boost::barrier pre_swap_barrier, post_swap_barrier;
 
-  int thread_finished_index;
+  std::vector<int> thread_status;
   boost::mutex thread_finished_mutex;
   boost::condition_variable thread_finished_cond;
 
@@ -303,7 +303,7 @@ void writer_thread(int thread_index,
   }
 
   boost::lock_guard<boost::mutex> lock(blk->thread_finished_mutex);
-  blk->thread_finished_index = thread_index;
+  blk->thread_status[thread_index] = 1;
   blk->thread_finished_cond.notify_one();
 }
 
@@ -356,7 +356,7 @@ void reader_thread(int thread_index,
   }
 
   boost::lock_guard<boost::mutex> lock(blk->thread_finished_mutex);
-  blk->thread_finished_index = thread_index;
+  blk->thread_status[thread_index] = 1;
   blk->thread_finished_cond.notify_one();
 }
 
@@ -381,22 +381,24 @@ void run_threads(std::vector<boost::shared_ptr<output_writer> > writers) {
     boost::unique_lock<boost::mutex> lock(blk->thread_finished_mutex);
     while (num_running_threads > 0) {
       blk->thread_finished_cond.wait(lock);
-      int idx = blk->thread_finished_index;
-      
-      if (idx >= 0) {
-        blk->thread_finished_index = -1;
-        
-        boost::shared_ptr<boost::thread> thread = threads[idx];
-        thread->join();
-        --num_running_threads;
-        
-        if (exceptions[idx]) {
-          lock.unlock();
-          // interrupt all other threads and join them
-          join_all_but(idx, threads);
-          lock.lock();
-          // re-throw the exception
-          boost::rethrow_exception(exceptions[idx]);
+
+      for (int idx = 0; idx < num_threads; ++idx) {
+        if (blk->thread_status[idx] != 0) {
+
+          blk->thread_status[idx] = 0;
+
+          boost::shared_ptr<boost::thread> thread = threads[idx];
+          thread->join();
+          --num_running_threads;
+
+          if (exceptions[idx]) {
+            lock.unlock();
+            // interrupt all other threads and join them
+            join_all_but(idx, threads);
+            lock.lock();
+            // re-throw the exception
+            boost::rethrow_exception(exceptions[idx]);
+          }
         }
       }
     }
