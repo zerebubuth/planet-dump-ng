@@ -302,9 +302,18 @@ void writer_thread(int thread_index,
               << boost::diagnostic_information(exc) << std::endl;
   }
 
-  boost::lock_guard<boost::mutex> lock(blk->thread_finished_mutex);
-  blk->thread_status[thread_index] = 1;
-  blk->thread_finished_cond.notify_one();
+  try {
+    boost::lock_guard<boost::mutex> lock(blk->thread_finished_mutex);
+    blk->thread_status[thread_index] = 1;
+    blk->thread_finished_cond.notify_one();
+
+  } catch (...) {
+    // this is a difficult case to handle - it's possible for locking
+    // to fail, but unless we signal the condition variable then the
+    // program would hang. instead, treat this as a fatal error.
+    std::cerr << "Thread " << thread_index << " failed to lock mutex!\n";
+    abort();
+  }
 }
 
 void join_all_but(size_t i, std::vector<boost::shared_ptr<boost::thread> > &threads) {
@@ -355,9 +364,18 @@ void reader_thread(int thread_index,
               << boost::diagnostic_information(exc) << std::endl;
   }
 
-  boost::lock_guard<boost::mutex> lock(blk->thread_finished_mutex);
-  blk->thread_status[thread_index] = 1;
-  blk->thread_finished_cond.notify_one();
+  try {
+    boost::lock_guard<boost::mutex> lock(blk->thread_finished_mutex);
+    blk->thread_status[thread_index] = 1;
+    blk->thread_finished_cond.notify_one();
+
+  } catch (...) {
+    // this is a difficult case to handle - it's possible for locking
+    // to fail, but unless we signal the condition variable then the
+    // program would hang. instead, treat this as a fatal error.
+    std::cerr << "Thread " << thread_index << " failed to lock mutex!\n";
+    abort();
+  }
 }
 
 template <typename T>
