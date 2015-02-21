@@ -28,15 +28,15 @@ To install these on Ubuntu, you can just type:
 
     sudo apt-get install build-essential automake autoconf \
       libxml2-dev libboost-dev libboost-program-options-dev \
-	  libboost-date-time-dev libboost-filesystem-dev \
-	  libboost-thread-dev libboost-iostreams-dev \
-	  libosmpbf-dev osmpbf-bin libleveldb-dev \
-      libsnappy-dev libprotobuf-dev pkg-config
+      libboost-date-time-dev libboost-filesystem-dev \
+      libboost-thread-dev libboost-iostreams-dev \
+      libosmpbf-dev osmpbf-bin libsnappy-dev \
+      libprotobuf-dev pkg-config
 
 After that, it should just be a matter of running:
 
     ./autogen.sh
-    ./configure --with-leveldb=/usr
+    ./configure
     make
   
 If you run into any issues with this, please file a bug on the github
@@ -71,14 +71,10 @@ the PostgreSQL dump, and the part which writes XML and/or PBF.
 
 The part which reads the PostgreSQL dump operates by launching
 "pg_restore" as a sub-process and parsing its output (in quite a naive
-way) to get the row data. Row data in a dump is not guaranteed to be
-ordered in the way that we like for planet dumps, so the rows are
-written out to a LevelDB database as an intermediate step.
-
-The part which writes the XML and/or PBF then reads these LevelDB
-databases with keys in order, and does a join between the top level
-elements like nodes, ways and relations and their "inners" - things
-like tags, way nodes and relation members.
+way) to get the row data. The part which writes the XML and/or PBF then
+does a join between the top level elements like nodes, ways and
+relations and their "inners" - things like tags, way nodes and relation
+members.
 
 In order that the system can output a planet file or a history planet
 file in the same run, all of this is generated from the history
