@@ -126,7 +126,7 @@ std::string fmt_iso_time(const pt::ptime &t) {
 
 struct xml_writer::pimpl {
   pimpl(const std::string &file_name, const boost::program_options::variables_map &options,
-        const pt::ptime &now, bool has_history, bool has_changeset_discussions);
+        const pt::ptime &now, bool has_history);
   ~pimpl();
 
   void begin(const char *name);
@@ -155,7 +155,7 @@ struct xml_writer::pimpl {
   FILE *m_out;
   xmlTextWriterPtr m_writer;
   pt::ptime m_now;
-  bool m_has_history, m_has_changeset_discussions;
+  bool m_has_history;
 };
 
 static int wrap_write(void *context, const char *buffer, int len) {
@@ -200,10 +200,9 @@ static int wrap_close(void *context) {
 }
 
 xml_writer::pimpl::pimpl(const std::string &file_name, const boost::program_options::variables_map &options,
-                         const pt::ptime &now, bool has_history, bool has_changeset_discussions) 
+                         const pt::ptime &now, bool has_history) 
   : m_command(popen_command(file_name, options)), m_out(popen(m_command.c_str(), "w")), 
-    m_writer(NULL), m_now(now), m_has_history(has_history),
-    m_has_changeset_discussions(has_changeset_discussions) {
+    m_writer(NULL), m_now(now), m_has_history(has_history) {
   
   if (m_out == NULL) {
     BOOST_THROW_EXCEPTION(std::runtime_error("Unable to popen compression command for output."));
@@ -336,28 +335,22 @@ void xml_writer::pimpl::add_tag(const old_tag &t) {
 }
 
 void xml_writer::pimpl::start_discussion() {
-  if (m_has_changeset_discussions) {
-    begin("discussion");
-  }
+  begin("discussion");
 }
 
 void xml_writer::pimpl::end_discussion() {
-  if (m_has_changeset_discussions) {
-    end();
-  }
+  end();
 }
 
 void xml_writer::pimpl::add_comment(const changeset_comment &c, const std::string &display_name) {
-  if (m_has_changeset_discussions) {
-    begin("comment");
-    attribute("uid", c.author_id);
-    attribute("user", display_name);
-    attribute("date", c.created_at);
-    begin("text");
-    text(c.body);
-    end();
-    end();
-  }
+  begin("comment");
+  attribute("uid", c.author_id);
+  attribute("user", display_name);
+  attribute("date", c.created_at);
+  begin("text");
+  text(c.body);
+  end();
+  end();
 }
 
 namespace {
@@ -410,8 +403,9 @@ void write_tags(int64_t id, int64_t version,
 xml_writer::xml_writer(const std::string &file_name, const boost::program_options::variables_map &options,
                        const user_map_t &users, const pt::ptime &max_time, bool has_history,
                        bool has_changeset_discussions)
-  : m_impl(new pimpl(file_name, options, max_time, has_history, has_changeset_discussions))
-  , m_users(users) {
+  : m_impl(new pimpl(file_name, options, max_time, has_history))
+  , m_users(users)
+  , m_has_changeset_discussions(has_changeset_discussions) {
 
   m_impl->begin("osm");
   m_impl->attribute("license",     OSM_LICENSE_TEXT);
@@ -468,6 +462,22 @@ void xml_writer::changesets(const std::vector<changeset> &css,
 
     m_impl->attribute("num_changes", cs.num_changes);
 
+    // first, find out if there are any comments for this
+    // changeset.
+    std::vector<changeset_comment>::const_iterator comment_count_itr = comment_itr;
+    int64_t comment_count = 0;
+    while ((comment_count_itr != comment_end) && (comment_count_itr->changeset_id <= cs.id)) {
+      if (comment_count_itr->changeset_id == cs.id) {
+        if (comment_count_itr->visible) {
+          ++comment_count;
+        }
+      }
+      ++comment_count_itr;
+    }
+
+    // then set the attribute
+    m_impl->attribute("comments_count", comment_count);
+
     while ((tag_itr != tag_end) && (tag_itr->element_id <= cs.id)) {
       if (tag_itr->element_id == cs.id) {
         m_impl->add_tag(*tag_itr);
@@ -475,22 +485,24 @@ void xml_writer::changesets(const std::vector<changeset> &css,
       ++tag_itr;
     }
 
-    bool any_comments = false;
-    while ((comment_itr != comment_end) && (comment_itr->changeset_id <= cs.id)) {
-      if (comment_itr->changeset_id == cs.id) {
-        if (comment_itr->visible) {
-          if (!any_comments) {
-            any_comments = true;
-            m_impl->start_discussion();
-          }
+    // if we're outputting changeset discussions, then do that here
+    // when there are some comments.
+    if ((comment_count > 0) && m_has_changeset_discussions) {
+      m_impl->start_discussion();
+
+      for (; comment_itr != comment_count_itr; ++comment_itr) {
+        if ((comment_itr->changeset_id == cs.id) &&
+            (comment_itr->visible)) {
           user_map_t::const_iterator author_itr = m_users.find(comment_itr->author_id);
           m_impl->add_comment(*comment_itr, author_itr->second);
         }
       }
-      ++comment_itr;
-    }
-    if (any_comments) {
+
       m_impl->end_discussion();
+
+    } else {
+      // otherwise just move the iterator on
+      comment_itr = comment_count_itr;
     }
 
     m_impl->end();

@@ -32,6 +32,7 @@ public:
 private:
   boost::scoped_ptr<pimpl> m_impl;
   const user_map_t &m_users;
+  bool m_has_changeset_discussions;
   changeset_map_t m_changesets;
 };
 
