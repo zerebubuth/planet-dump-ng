@@ -125,7 +125,8 @@ std::string fmt_iso_time(const pt::ptime &t) {
 } // anonymous namespace
 
 struct xml_writer::pimpl {
-  pimpl(const std::string &file_name, const boost::program_options::variables_map &options, const pt::ptime &now, bool has_history);
+  pimpl(const std::string &file_name, const boost::program_options::variables_map &options,
+        const pt::ptime &now, bool has_history, bool has_changeset_discussions);
   ~pimpl();
 
   void begin(const char *name);
@@ -138,8 +139,14 @@ struct xml_writer::pimpl {
   void attribute(const char *name, const std::string &s);
   void end();
 
+  void text(const std::string &t);
+
   void add_tag(const current_tag &t);
   void add_tag(const old_tag &t);
+
+  void start_discussion();
+  void end_discussion();
+  void add_comment(const changeset_comment &c, const std::string &display_name);
 
   // flush & close output stream
   void finish();
@@ -148,7 +155,7 @@ struct xml_writer::pimpl {
   FILE *m_out;
   xmlTextWriterPtr m_writer;
   pt::ptime m_now;
-  bool m_has_history;
+  bool m_has_history, m_has_changeset_discussions;
 };
 
 static int wrap_write(void *context, const char *buffer, int len) {
@@ -192,9 +199,11 @@ static int wrap_close(void *context) {
   return 0;
 }
 
-xml_writer::pimpl::pimpl(const std::string &file_name, const boost::program_options::variables_map &options, const pt::ptime &now, bool has_history) 
+xml_writer::pimpl::pimpl(const std::string &file_name, const boost::program_options::variables_map &options,
+                         const pt::ptime &now, bool has_history, bool has_changeset_discussions) 
   : m_command(popen_command(file_name, options)), m_out(popen(m_command.c_str(), "w")), 
-    m_writer(NULL), m_now(now), m_has_history(has_history) {
+    m_writer(NULL), m_now(now), m_has_history(has_history),
+    m_has_changeset_discussions(has_changeset_discussions) {
   
   if (m_out == NULL) {
     BOOST_THROW_EXCEPTION(std::runtime_error("Unable to popen compression command for output."));
@@ -306,6 +315,12 @@ void xml_writer::pimpl::end() {
   }
 }
 
+void xml_writer::pimpl::text(const std::string &t) {
+  if (xmlTextWriterWriteString(m_writer, BAD_CAST t.c_str()) < 0) {
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write text to XML."));
+  }
+}
+
 void xml_writer::pimpl::add_tag(const current_tag &t) {
   begin("tag");
   attribute("k", t.key);
@@ -318,6 +333,31 @@ void xml_writer::pimpl::add_tag(const old_tag &t) {
   attribute("k", t.key);
   attribute("v", t.value);
   end();
+}
+
+void xml_writer::pimpl::start_discussion() {
+  if (m_has_changeset_discussions) {
+    begin("discussion");
+  }
+}
+
+void xml_writer::pimpl::end_discussion() {
+  if (m_has_changeset_discussions) {
+    end();
+  }
+}
+
+void xml_writer::pimpl::add_comment(const changeset_comment &c, const std::string &display_name) {
+  if (m_has_changeset_discussions) {
+    begin("comment");
+    attribute("uid", c.author_id);
+    attribute("user", display_name);
+    attribute("date", c.created_at);
+    begin("text");
+    text(c.body);
+    end();
+    end();
+  }
 }
 
 namespace {
@@ -368,8 +408,11 @@ void write_tags(int64_t id, int64_t version,
 } // anonymous namespace
 
 xml_writer::xml_writer(const std::string &file_name, const boost::program_options::variables_map &options,
-                       const user_map_t &users, const pt::ptime &max_time, bool has_history)
-  : m_impl(new pimpl(file_name, options, max_time, has_history)), m_users(users) {
+                       const user_map_t &users, const pt::ptime &max_time, bool has_history,
+                       bool has_changeset_discussions)
+  : m_impl(new pimpl(file_name, options, max_time, has_history, has_changeset_discussions))
+  , m_users(users) {
+
   m_impl->begin("osm");
   m_impl->attribute("license",     OSM_LICENSE_TEXT);
   m_impl->attribute("copyright",   OSM_COPYRIGHT_TEXT);
@@ -388,8 +431,12 @@ xml_writer::~xml_writer() {
 }
 
 void xml_writer::changesets(const std::vector<changeset> &css,
-                            const std::vector<current_tag> &ts) {
+                            const std::vector<current_tag> &ts,
+                            const std::vector<changeset_comment> &ccs) {
   std::vector<current_tag>::const_iterator tag_itr = ts.begin();
+  const std::vector<current_tag>::const_iterator tag_end = ts.end();
+  std::vector<changeset_comment>::const_iterator comment_itr = ccs.begin();
+  const std::vector<changeset_comment>::const_iterator comment_end = ccs.end();
 
   BOOST_FOREACH(const changeset &cs, css) {
     m_impl->begin("changeset");
@@ -421,11 +468,29 @@ void xml_writer::changesets(const std::vector<changeset> &css,
 
     m_impl->attribute("num_changes", cs.num_changes);
 
-    while ((tag_itr != ts.end()) && (tag_itr->element_id <= cs.id)) {
+    while ((tag_itr != tag_end) && (tag_itr->element_id <= cs.id)) {
       if (tag_itr->element_id == cs.id) {
         m_impl->add_tag(*tag_itr);
       }
       ++tag_itr;
+    }
+
+    bool any_comments = false;
+    while ((comment_itr != comment_end) && (comment_itr->changeset_id <= cs.id)) {
+      if (comment_itr->changeset_id == cs.id) {
+        if (comment_itr->visible) {
+          if (!any_comments) {
+            any_comments = true;
+            m_impl->start_discussion();
+          }
+          user_map_t::const_iterator author_itr = m_users.find(comment_itr->author_id);
+          m_impl->add_comment(*comment_itr, author_itr->second);
+        }
+      }
+      ++comment_itr;
+    }
+    if (any_comments) {
+      m_impl->end_discussion();
     }
 
     m_impl->end();

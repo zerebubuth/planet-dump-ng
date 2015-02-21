@@ -123,3 +123,4 @@ template struct run_thread<way>;
 template struct run_thread<way_node>;
 template struct run_thread<relation>;
 template struct run_thread<relation_member>;
+template struct run_thread<changeset_comment>;

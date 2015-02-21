@@ -16,6 +16,7 @@ template <> boost::posix_time::ptime timestamp_of<changeset>(const changeset &cs
 template <> boost::posix_time::ptime timestamp_of<node>(const node &n)            { return n.timestamp; }
 template <> boost::posix_time::ptime timestamp_of<way>(const way &w)              { return w.timestamp; }
 template <> boost::posix_time::ptime timestamp_of<relation>(const relation &r)    { return r.timestamp; }
+template <> boost::posix_time::ptime timestamp_of<changeset_comment>(const changeset_comment &cc) { return cc.created_at; }
 
 template <typename R>
 struct table_extractor_with_timestamp {

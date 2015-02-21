@@ -1,3 +1,4 @@
+
 #include "changeset_filter.hpp"
 #include <boost/date_time/posix_time/posix_time.hpp>
 
@@ -5,8 +6,9 @@
 
 template <typename T>
 changeset_filter<T>::changeset_filter(const std::string &option_name, const boost::program_options::variables_map &options,
-                                  const user_map_t &user_map, const boost::posix_time::ptime &max_time)
-  : m_writer(new T(option_name, options, user_map, max_time, false)) {
+                                      const user_map_t &user_map, const boost::posix_time::ptime &max_time,
+                                      bool include_discussions)
+  : m_writer(new T(option_name, options, user_map, max_time, false, include_discussions)) {
 }
 
 template <typename T>
@@ -14,9 +16,11 @@ changeset_filter<T>::~changeset_filter() {
 }
 
 template <typename T>
-void changeset_filter<T>::changesets(const std::vector<changeset> &cs, const std::vector<current_tag> &ts) {
+void changeset_filter<T>::changesets(const std::vector<changeset> &cs,
+                                     const std::vector<current_tag> &ts,
+                                     const std::vector<changeset_comment> &ccs) {
   // no filtering for changesets - we want them.
-  m_writer->changesets(cs, ts);
+  m_writer->changesets(cs, ts, ccs);
 }
 
 template <typename T>

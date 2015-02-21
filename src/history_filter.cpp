@@ -18,10 +18,12 @@ history_filter<T>::~history_filter() {
 }
 
 template <typename T>
-void history_filter<T>::changesets(const std::vector<changeset> &cs, const std::vector<current_tag> &ts) {
+void history_filter<T>::changesets(const std::vector<changeset> &cs,
+                                   const std::vector<current_tag> &ts,
+                                   const std::vector<changeset_comment> &ccs) {
   // no filtering for changesets - they are all "current", and all get passed
   // through to the backend.
-  m_writer->changesets(cs, ts);
+  m_writer->changesets(cs, ts, ccs);
 }
 
 template <typename T>

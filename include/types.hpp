@@ -57,6 +57,25 @@ BOOST_FUSION_ADAPT_STRUCT(
   (std::string, value)
   )
 
+struct changeset_comment {
+  static const int num_keys = 2;
+  static const std::vector<std::string> &column_names();
+
+  int64_t changeset_id, author_id;
+  std::string body;
+  boost::posix_time::ptime created_at;
+  bool visible;
+};
+
+BOOST_FUSION_ADAPT_STRUCT(
+  changeset_comment,
+  (int64_t, changeset_id)
+  (boost::posix_time::ptime, created_at)
+  (int64_t, author_id)
+  (std::string, body)
+  (bool, visible)
+  )
+
 struct changeset {
   static const int num_keys = 1;
   static const std::vector<std::string> &column_names();
@@ -65,7 +84,7 @@ struct changeset {
   static const std::string inner_table_name();
 
   typedef current_tag tag_type;
-  typedef int inner_type;
+  typedef changeset_comment inner_type;
 
   int64_t id;
   int32_t uid;

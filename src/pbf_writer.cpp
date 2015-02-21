@@ -526,7 +526,9 @@ pbf_writer::pbf_writer(const std::string &file_name, const boost::program_option
 pbf_writer::~pbf_writer() {
 }
 
-void pbf_writer::changesets(const std::vector<changeset> &cs, const std::vector<current_tag> &) {
+void pbf_writer::changesets(const std::vector<changeset> &cs,
+                            const std::vector<current_tag> &,
+                            const std::vector<changeset_comment> &) {
   std::map<int64_t, int64_t> &changeset_user_map = m_impl->m_changeset_user_map;
   BOOST_FOREACH(const changeset &c, cs) {
     changeset_user_map.insert(std::make_pair(c.id, c.uid));

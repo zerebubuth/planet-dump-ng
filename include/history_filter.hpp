@@ -16,7 +16,9 @@ struct history_filter : public output_writer {
   history_filter(const std::string &, const boost::program_options::variables_map &, const user_map_t &, const boost::posix_time::ptime &);
   virtual ~history_filter();
 
-  void changesets(const std::vector<changeset> &, const std::vector<current_tag> &);
+  void changesets(const std::vector<changeset> &,
+                  const std::vector<current_tag> &,
+                  const std::vector<changeset_comment> &);
   void nodes(const std::vector<node> &, const std::vector<old_tag> &);
   void ways(const std::vector<way> &, const std::vector<way_node> &, const std::vector<old_tag> &);
   void relations(const std::vector<relation> &, const std::vector<relation_member> &, const std::vector<old_tag> &);
