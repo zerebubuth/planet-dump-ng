@@ -57,6 +57,7 @@ struct control_block {
   std::vector<T> elements;
   std::vector<tag_type> tags;
   std::vector<inner_type> inners;
+  std::vector<changeset_comment> comments;
 };
 
 template <typename T>
@@ -181,22 +182,25 @@ template <> struct block_size_trait<relation> { static const size_t value =   65
 template <typename T> void zero_init(T &);
 template <typename T> int64_t id_of(const T &);
 
-template <> inline void zero_init<current_tag>(current_tag &t) { t.element_id = 0; }
-template <> inline void zero_init<old_tag>(old_tag &t) { t.element_id = 0; }
-template <> inline void zero_init<way_node>(way_node &wn) { wn.way_id = 0; }
-template <> inline void zero_init<relation_member>(relation_member &rm) { rm.relation_id = 0; }
+template <> inline void zero_init<current_tag>(current_tag &t) { t.element_id = -1; }
+template <> inline void zero_init<old_tag>(old_tag &t) { t.element_id = -1; }
+template <> inline void zero_init<way_node>(way_node &wn) { wn.way_id = -1; }
+template <> inline void zero_init<relation_member>(relation_member &rm) { rm.relation_id = -1; }
+template <> inline void zero_init<changeset_comment>(changeset_comment &cc) { cc.changeset_id = -1; }
 template <> inline void zero_init<int>(int &) { }
 
 template <> inline int64_t id_of<current_tag>(const current_tag &t) { return t.element_id; }
 template <> inline int64_t id_of<old_tag>(const old_tag &t) { return t.element_id; }
 template <> inline int64_t id_of<way_node>(const way_node &wn) { return wn.way_id; }
 template <> inline int64_t id_of<relation_member>(const relation_member &rm) { return rm.relation_id; }
+template <> inline int64_t id_of<changeset_comment>(const changeset_comment &cc) { return cc.changeset_id; }
 
 template <typename T>
 inline int64_t version_of(const T &t) { return t.version; }
 
 template <> inline int64_t version_of<changeset>(const changeset &) { return 0; }
 template <> inline int64_t version_of<current_tag>(const current_tag &t) { return 0; }
+template <> inline int64_t version_of<changeset_comment>(const changeset_comment &) { return 0; }
 
 template <typename T>
 inline void fetch_associated(T &t, int64_t id, int64_t version, db_reader<T> &reader, std::vector<T> &vec) {
@@ -233,7 +237,7 @@ void extract_element(thread_writer<T> &writer) {
   std::vector<T> elements;
   std::vector<tag_type> tags;
   std::vector<inner_type> inners;
-  
+
   elements.resize(block_size);
   size_t i = 0;
 
@@ -247,7 +251,11 @@ void extract_element(thread_writer<T> &writer) {
     // skip all redacted elements - they don't appear in the output
     // at all.
     if (is_redacted<T>(elements[i])) { continue; }
-    
+
+    // skip all negative ID elements - these shouldn't appear in the
+    // database at all.
+    if (elements[i].id < 0) { continue; }
+
     fetch_associated(current_inner, elements[i].id, version_of(elements[i]), inner_reader, inners);
     fetch_associated(current_tag, elements[i].id, version_of(elements[i]), tag_reader, tags);
 
@@ -267,8 +275,8 @@ void extract_element(thread_writer<T> &writer) {
 
 template <typename T> void write_elements(output_writer &writer, control_block<T> &blk);
 
-template <> inline void write_elements<changeset>(output_writer &writer, control_block<changeset> &blk) { 
-  writer.changesets(blk.elements, blk.tags);
+template <> inline void write_elements<changeset>(output_writer &writer, control_block<changeset> &blk) {
+  writer.changesets(blk.elements, blk.tags, blk.inners);
 }
 template <> inline void write_elements<node>(output_writer &writer, control_block<node> &blk) { 
   writer.nodes(blk.elements, blk.tags);

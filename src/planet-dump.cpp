@@ -35,6 +35,8 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
     ("pbf,p", po::value<std::string>(), "planet PBF output file (without history)")
     ("history-pbf,P", po::value<std::string>(), "history PBF output file")
     ("changesets,C", po::value<std::string>(), "changeset XML output file")
+    ("changeset-discussions,D", po::value<std::string>(),
+     "changeset discussions XML output file")
     ("dense-nodes,d", po::value<bool>()->default_value("true"), "use dense nodes for PBF output")
     ("dump-file,f", po::value<std::string>(), "PostgreSQL table dump to read")
     ;
@@ -53,10 +55,13 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
 
   if ((vm.count("xml") + vm.count("history-xml") +
        vm.count("pbf") + vm.count("history-pbf") + 
-       vm.count("changesets")) == 0) {
-    BOOST_THROW_EXCEPTION(std::runtime_error("No output file provided! You must provide one or more of "
-                                             "--xml, --history-xml, --pbf, --history-pbf or --changesets "
-                                             "to get output."));
+       vm.count("changesets") + vm.count("changeset-discussions")) == 0) {
+    std::cerr <<
+      "No output file provided! You must provide one or more of "
+      "--xml, --history-xml, --pbf, --history-pbf, --changesets or "
+      "--changeset-discussions to get output.\n\n";
+    std::cerr << desc << std::endl;
+    exit(1);
   }
 }
 
@@ -82,6 +87,7 @@ bt::ptime setup_leveldb_databases(const std::string &dump_file) {
   threads.push_back(boost::make_shared<run_thread<relation_member> >("relation_members", dump_file));
   
   threads.push_back(boost::make_shared<run_thread<user> >("users", dump_file));
+  threads.push_back(boost::make_shared<run_thread<changeset_comment> >("changeset_comments", dump_file));
   
   bt::ptime max_time(bt::neg_infin);
   BOOST_FOREACH(boost::shared_ptr<base_thread> &thr, threads) {
@@ -134,7 +140,11 @@ int main(int argc, char *argv[]) {
     }
     if (options.count("changesets")) {
       std::string output_file = options["changesets"].as<std::string>();
-      writers.push_back(boost::shared_ptr<output_writer>(new changeset_filter<xml_writer>(output_file, options, display_name_map, max_time)));
+      writers.push_back(boost::shared_ptr<output_writer>(new changeset_filter<xml_writer>(output_file, options, display_name_map, max_time, false)));
+    }
+    if (options.count("changeset-discussions")) {
+      std::string output_file = options["changeset-discussions"].as<std::string>();
+      writers.push_back(boost::shared_ptr<output_writer>(new changeset_filter<xml_writer>(output_file, options, display_name_map, max_time, true)));
     }
 
     std::cerr << "Writing changesets..." << std::endl;

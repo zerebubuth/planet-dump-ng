@@ -173,3 +173,4 @@ template struct extract_kv<way>;
 template struct extract_kv<way_node>;
 template struct extract_kv<relation>;
 template struct extract_kv<relation_member>;
+template struct extract_kv<changeset_comment>;
