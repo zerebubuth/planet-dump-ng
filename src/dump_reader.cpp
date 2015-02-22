@@ -9,11 +9,6 @@
 #include <boost/noncopyable.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
-#ifdef HAVE_LEVELDB
-#include <leveldb/db.h>
-#include <leveldb/options.h>
-#include <leveldb/write_batch.h>
-#else /* HAVE_LEVELDB */
 #include <boost/filesystem.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
@@ -23,7 +18,6 @@
 #include <boost/make_shared.hpp>
 #include <fstream>
 //#include <fcntl.h>
-#endif /* HAVE_LEVELDB */
 
 #include <boost/spirit/include/qi.hpp>
 #include <boost/foreach.hpp>
@@ -38,22 +32,17 @@
 namespace {
 
 namespace qi = boost::spirit::qi;
-#ifndef HAVE_LEVELDB
 namespace bio = boost::iostreams;
 namespace fs = boost::filesystem;
-#endif /* !HAVE_LEVELDB */
 
 struct tag_copy_header;
-struct tag_leveldb_status;
 
 typedef boost::error_info<tag_copy_header, std::string>    copy_header;
-typedef boost::error_info<tag_leveldb_status, std::string> leveldb_status;
 
 struct popen_error : public boost::exception, std::exception {};
 struct fread_error : public boost::exception, std::exception {};
 struct early_termination_error : public boost::exception, std::exception {};
 struct copy_header_parse_error : public boost::exception, std::exception {};
-struct leveldb_error : public boost::exception, std::exception {};
 
 typedef boost::shared_ptr<FILE> pipe_ptr;
 
@@ -244,59 +233,6 @@ private:
   copy_line<std::string::iterator> m_grammar;
   std::string m_table_name;
 };
-
-#ifdef HAVE_LEVELDB  
-struct db_writer {
-  explicit db_writer(const std::string &table_name)
-    : m_db(NULL),
-      m_batch(),
-      m_batch_size(0),
-      m_write_options() {
-
-    leveldb::Options options;
-    options.create_if_missing = true;
-    options.error_if_exists = true;
-
-    // bigger write buffer, as this is a write-heavy process...
-    options.write_buffer_size = 128 * 1024 * 1024;
-
-    leveldb::Status status = leveldb::DB::Open(options, table_name, &m_db);
-    if (!status.ok()) {
-      BOOST_THROW_EXCEPTION(leveldb_error() << leveldb_status(status.ToString()));
-    }
-  }
-
-  ~db_writer() {
-    delete m_db;
-  }
-
-  void finish() {
-    if (m_batch_size > 0) {
-      m_db->Write(m_write_options, &m_batch);
-      m_batch.Clear();
-      m_batch_size = 0;
-    }
-    m_db->CompactRange(NULL, NULL);
-  }
-
-  void put(const std::string &k, const std::string &v) {
-    m_batch.Put(k, v);
-    ++m_batch_size;
-
-    if (m_batch_size >= BATCH_SIZE) {
-      m_db->Write(m_write_options, &m_batch);
-      m_batch.Clear();
-      m_batch_size = 0;
-    }
-  }
-  
-  leveldb::DB *m_db;
-  leveldb::WriteBatch m_batch;
-  size_t m_batch_size;
-  leveldb::WriteOptions m_write_options;
-};
-
-#else /* HAVE_LEVELDB */
 
 typedef std::pair<std::string, std::string> kv_pair_t;
 
@@ -607,7 +543,6 @@ private:
     if (tcb.m_error) { boost::rethrow_exception(tcb.m_error); }
   }
 };
-#endif /* HAVE_LEVELDB */
 
 } // anonymous namespace
 

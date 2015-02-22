@@ -107,7 +107,7 @@ template <typename R>
 bt::ptime run_thread<R>::join() {
   thr.join();
   if (error) {
-    boost::throw_exception(boost::enable_error_info(std::runtime_error("Error during archive dump to LevelDB."))
+    boost::throw_exception(boost::enable_error_info(std::runtime_error("Error during archive dump to disk database."))
                            << boost::errinfo_nested_exception(error)
                            << errinfo_table_name(table_name));
   }

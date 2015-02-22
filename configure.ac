@@ -26,20 +26,6 @@ AX_BOOST_DATE_TIME
 AX_BOOST_THREAD
 AX_BOOST_IOSTREAMS
 
-AC_ARG_WITH(leveldb,
-	[AS_HELP_STRING([--with-leveldb=<path>], [Path containing LevelDB library (e.g: /usr), if you want to use it.])],
-	[LEVELDB_PREFIX=$with_leveldb])
-AS_IF([test "x$LEVELDB_PREFIX" != x],
-        [AC_DEFINE([HAVE_LEVELDB], [1], [Define when LevelDB library is to be used.])],
-	[])
-AM_CONDITIONAL([HAVE_LEVELDB], [test "x$LEVELDB_PREFIX" != x])
-
-AC_SUBST(LEVELDB_PREFIX)
-LEVELDB_LIBS="-L${LEVELDB_PREFIX}/lib -lleveldb -lsnappy"
-LEVELDB_CFLAGS="-I${LEVELDB_PREFIX}/include"
-AC_SUBST(LEVELDB_LIBS)
-AC_SUBST(LEVELDB_CFLAGS)
-
 PKG_CHECK_MODULES([PROTOBUF_LITE], "protobuf-lite")
 AC_SUBST([PROTOBUF_LITE_CFLAGS])
 AC_SUBST([PROTOBUF_LITE_LIBS])

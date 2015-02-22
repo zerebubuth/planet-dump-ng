@@ -7,7 +7,7 @@
 #include <string>
 
 /**
- * Read the LevelDB database for users, and extract all the public data
+ * Read the disk database for users, and extract all the public data
  * ones into a map of user ID to display name.
  */
 void extract_users(std::map<int64_t, std::string> &display_name_map);
