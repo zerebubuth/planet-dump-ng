@@ -139,11 +139,7 @@ struct unapp_item {
 
 template <typename T>
 void from_binary(const slice_t &s, T &t) {
-#ifdef HAVE_LEVELDB
-  std::istringstream in(s.ToString());
-#else /* HAVE_LEVELDB */
   std::istringstream in(s);
-#endif /* HAVE_LEVELDB */
   bf::fold(t, 0, unapp_item(in));
 }
 

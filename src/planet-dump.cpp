@@ -69,12 +69,12 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
 }
 
 /**
- * read the dump file in parallel to get all of the elements into leveldb
+ * read the dump file in parallel to get all of the elements into on-disk
  * databases. this is primarily so that the data is sorted, which is not
  * guaranteed in the PostgreSQL dump file. returns the maximum time seen
  * in a timestamp of any element in the dump file.
  */
-bt::ptime setup_leveldb_databases(const std::string &dump_file) {
+bt::ptime setup_databases(const std::string &dump_file) {
   std::list<boost::shared_ptr<base_thread> > threads;
   
   threads.push_back(boost::make_shared<run_thread<changeset> >("changesets", dump_file));
@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
     // extract data from the dump file for the "sorted" data tables, like nodes,
     // ways, relations, changesets and their associated tags, etc...
     const std::string dump_file(options["dump-file"].as<std::string>());
-    const bt::ptime max_time = setup_leveldb_databases(dump_file);
+    const bt::ptime max_time = setup_databases(dump_file);
 
     // users aren't dumped directly to the files. we only use them to build up a map
     // of uid -> name where a missing uid indicates that the user doesn't have public

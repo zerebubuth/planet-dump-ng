@@ -18,22 +18,15 @@
 #include <boost/make_shared.hpp>
 #include <boost/foreach.hpp>
 
-#ifdef HAVE_LEVELDB
-#include <leveldb/db.h>
-#include <leveldb/options.h>
-#else /* HAVE_LEVELDB */
 #include <boost/filesystem.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <boost/iostreams/operations.hpp>
 #include <fstream>
-#endif /* HAVE_LEVELDB */
 
-#ifndef HAVE_LEVELDB
 namespace bio = boost::iostreams;
 namespace fs = boost::filesystem;
-#endif /* HAVE_LEVELDB */
 
 namespace {
 
@@ -78,50 +71,6 @@ struct thread_writer {
   }
 };
 
-#ifdef HAVE_LEVELDB
-// leveldb implementation of db_reader
-template <typename T>
-struct db_reader {
-  db_reader(const std::string &name) : m_db(NULL), m_itr(NULL) {
-    m_options.create_if_missing = false;
-    m_options.error_if_exists = false;
-    
-    leveldb::Status status;
-    status = leveldb::DB::Open(m_options, name, &m_db);
-    if (!status.ok()) {
-      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Can't open database: %1%") % status.ToString()).str()));
-    }
-
-    m_itr = m_db->NewIterator(m_read_options);
-    m_itr->SeekToFirst();
-  }
-
-  ~db_reader() {
-    if (m_itr != NULL) {
-      delete m_itr;
-    }
-    if (m_db != NULL) {
-      delete m_db;
-    }
-  }
-
-  bool operator()(T &t) {
-    const bool valid = m_itr->Valid();
-    if (valid) {
-      leveldb::Slice key = m_itr->key();
-      leveldb::Slice val = m_itr->value();
-      insert_kv(t, key, val);
-      m_itr->Next();
-    }
-    return valid;
-  }
-
-  leveldb::DB *m_db;
-  leveldb::Iterator *m_itr;
-  leveldb::Options m_options;
-  leveldb::ReadOptions m_read_options;
-};
-#else /* HAVE_LEVELDB */
 template <typename T>
 struct db_reader {
   explicit db_reader(const std::string &subdir) : m_end(false) {
@@ -169,7 +118,6 @@ private:
   std::ifstream m_file;
   bio::filtering_streambuf<bio::input> m_stream;
 };
-#endif /* HAVE_LEVELDB */
 
 template <>
 struct db_reader<int> {

@@ -20,9 +20,7 @@ Before building the code, you will need:
 * libxml2 (version 2.6.31 recommended),
 * The Boost libraries (version 1.49 recommended),
 * libosmpbf (version 1.3.0 recommended),
-* leveldb (version 1.9.0 recommended),
 * libprotobuf and libprotobuf-lite (version 2.4.1 recommended)
-* libsnappy
 
 To install these on Ubuntu, you can just type:
 
@@ -30,8 +28,7 @@ To install these on Ubuntu, you can just type:
       libxml2-dev libboost-dev libboost-program-options-dev \
       libboost-date-time-dev libboost-filesystem-dev \
       libboost-thread-dev libboost-iostreams-dev \
-      libosmpbf-dev osmpbf-bin libsnappy-dev \
-      libprotobuf-dev pkg-config
+      libosmpbf-dev osmpbf-bin libprotobuf-dev pkg-config
 
 After that, it should just be a matter of running:
 
@@ -51,7 +48,7 @@ you can read by running:
 
     planet-dump-ng --help
 
-One thing to note is that the program will create LevelDB databases in
+One thing to note is that the program will create on-disk databases in
 the current working directory, so it is wise to run the program
 somewhere with plenty of fast disk space. Existing files may interfere
 with the operation of the program, so it's best to run it in its own,
