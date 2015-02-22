@@ -39,6 +39,9 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
      "changeset discussions XML output file")
     ("dense-nodes,d", po::value<bool>()->default_value("true"), "use dense nodes for PBF output")
     ("dump-file,f", po::value<std::string>(), "PostgreSQL table dump to read")
+    ("generator", po::value<std::string>()->default_value(PACKAGE_STRING),
+     "Override the generator string used by the program. Used by the tests to "
+     "ensure consistent output, probably shouldn't be used in normal usage.")
     ;
 
   po::store(po::parse_command_line(argc, argv, desc), vm);

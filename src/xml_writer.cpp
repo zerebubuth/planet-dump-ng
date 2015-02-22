@@ -405,13 +405,14 @@ xml_writer::xml_writer(const std::string &file_name, const boost::program_option
                        bool has_changeset_discussions)
   : m_impl(new pimpl(file_name, options, max_time, has_history))
   , m_users(users)
-  , m_has_changeset_discussions(has_changeset_discussions) {
+  , m_has_changeset_discussions(has_changeset_discussions)
+  , m_generator_name(options["generator"].as<std::string>()) {
 
   m_impl->begin("osm");
   m_impl->attribute("license",     OSM_LICENSE_TEXT);
   m_impl->attribute("copyright",   OSM_COPYRIGHT_TEXT);
   m_impl->attribute("version",     OSM_VERSION_TEXT);
-  m_impl->attribute("generator",   PACKAGE_STRING);
+  m_impl->attribute("generator",   m_generator_name);
   m_impl->attribute("attribution", OSM_ATTRIBUTION_TEXT);
   m_impl->attribute("timestamp",   m_impl->m_now);
 
