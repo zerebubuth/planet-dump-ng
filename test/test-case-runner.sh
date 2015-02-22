@@ -7,7 +7,7 @@ SRCDIR=$(pwd)
 
 function cleanup {
 	 cd $SRCDIR
-	 #rm -rf $TMPDIR
+	 rm -rf $TMPDIR
 }
 
 trap cleanup EXIT
