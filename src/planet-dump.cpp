@@ -42,6 +42,9 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
     ("generator", po::value<std::string>()->default_value(PACKAGE_STRING),
      "Override the generator string used by the program. Used by the tests to "
      "ensure consistent output, probably shouldn't be used in normal usage.")
+    ("resume", "If this argument is present, then planet-dump-ng will attempt "
+     "to resume processing from partial data. If not present, then it will "
+     "start from scratch.")
     ;
 
   po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -74,23 +77,27 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
  * guaranteed in the PostgreSQL dump file. returns the maximum time seen
  * in a timestamp of any element in the dump file.
  */
-bt::ptime setup_databases(const std::string &dump_file) {
+bt::ptime setup_databases(const std::string &dump_file, bool resume) {
   std::list<boost::shared_ptr<base_thread> > threads;
   
-  threads.push_back(boost::make_shared<run_thread<changeset> >("changesets", dump_file));
-  threads.push_back(boost::make_shared<run_thread<node> >("nodes", dump_file));
-  threads.push_back(boost::make_shared<run_thread<way> >("ways", dump_file));
-  threads.push_back(boost::make_shared<run_thread<relation> >("relations", dump_file));
+#define THREAD_RUN(type,table) threads.push_back(boost::make_shared<run_thread<type> >(table, dump_file, resume))
+
+  THREAD_RUN(changeset, "changesets");
+  THREAD_RUN(node, "nodes");
+  THREAD_RUN(way, "ways");
+  THREAD_RUN(relation, "relations");
   
-  threads.push_back(boost::make_shared<run_thread<current_tag> >("changeset_tags", dump_file));
-  threads.push_back(boost::make_shared<run_thread<old_tag> >("node_tags", dump_file));
-  threads.push_back(boost::make_shared<run_thread<old_tag> >("way_tags", dump_file));
-  threads.push_back(boost::make_shared<run_thread<old_tag> >("relation_tags", dump_file));
-  threads.push_back(boost::make_shared<run_thread<way_node> >("way_nodes", dump_file));
-  threads.push_back(boost::make_shared<run_thread<relation_member> >("relation_members", dump_file));
+  THREAD_RUN(current_tag, "changeset_tags");
+  THREAD_RUN(old_tag, "node_tags");
+  THREAD_RUN(old_tag, "way_tags");
+  THREAD_RUN(old_tag, "relation_tags");
+  THREAD_RUN(way_node, "way_nodes");
+  THREAD_RUN(relation_member, "relation_members");
   
-  threads.push_back(boost::make_shared<run_thread<user> >("users", dump_file));
-  threads.push_back(boost::make_shared<run_thread<changeset_comment> >("changeset_comments", dump_file));
+  THREAD_RUN(user, "users");
+  THREAD_RUN(changeset_comment, "changeset_comments");
+
+#undef THREAD_RUN
   
   bt::ptime max_time(bt::neg_infin);
   BOOST_FOREACH(boost::shared_ptr<base_thread> &thr, threads) {
@@ -112,8 +119,9 @@ int main(int argc, char *argv[]) {
 
     // extract data from the dump file for the "sorted" data tables, like nodes,
     // ways, relations, changesets and their associated tags, etc...
+    const bool resume = options.count("resume") > 0;
     const std::string dump_file(options["dump-file"].as<std::string>());
-    const bt::ptime max_time = setup_databases(dump_file);
+    const bt::ptime max_time = setup_databases(dump_file, resume);
 
     // users aren't dumped directly to the files. we only use them to build up a map
     // of uid -> name where a missing uid indicates that the user doesn't have public

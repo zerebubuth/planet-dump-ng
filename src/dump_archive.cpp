@@ -27,13 +27,14 @@ typedef boost::error_info<tag_table_name, std::string> errinfo_table_name;
 
 template <typename R>
 bt::ptime extract_table_with_timestamp(const std::string &table_name, 
-                                       const std::string &dump_file) {
+                                       const std::string &dump_file,
+                                       bool resume) {
   typedef R row_type;
   fs::path base_dir(table_name);
   boost::optional<bt::ptime> timestamp;
 
   if (fs::exists(base_dir)) {
-    if (fs::is_directory(base_dir) && fs::exists(base_dir / ".complete")) {
+    if (fs::is_directory(base_dir) && fs::exists(base_dir / ".complete") && resume) {
       std::string timestamp_str;
       fs::ifstream in(base_dir / ".complete");
       std::getline(in, timestamp_str);
@@ -64,9 +65,10 @@ template <typename R>
 void thread_extract_with_timestamp(bt::ptime &timestamp,
                                    boost::exception_ptr &error,
                                    std::string table_name,
-                                   std::string dump_file) {
+                                   std::string dump_file,
+                                   bool resume) {
   try {
-    bt::ptime ts = extract_table_with_timestamp<R>(table_name, dump_file);
+    bt::ptime ts = extract_table_with_timestamp<R>(table_name, dump_file, resume);
     timestamp = ts;
 
   } catch (const boost::exception &e) {
@@ -88,11 +90,11 @@ void thread_extract_with_timestamp(bt::ptime &timestamp,
 base_thread::~base_thread() {}
 
 template <typename R>
-run_thread<R>::run_thread(std::string table_name_, std::string dump_file)
+run_thread<R>::run_thread(std::string table_name_, std::string dump_file, bool resume)
   : timestamp(), error(), 
     thr(&thread_extract_with_timestamp<R>,
         boost::ref(timestamp), boost::ref(error),
-        table_name_, dump_file), table_name(table_name_) {
+        table_name_, dump_file, resume), table_name(table_name_) {
 }
 
 template <typename R>
