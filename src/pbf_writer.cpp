@@ -124,7 +124,7 @@ struct pbf_writer::pimpl {
     m_recheck_elements[element_CHANGESET] = 1;
     m_recheck_elements[element_NODE] = 16000;
     m_recheck_elements[element_WAY] = 8000;
-    m_recheck_elements[element_RELATION] = 2000;
+    m_recheck_elements[element_RELATION] = 500;
 
     reset_dense_ids();
 
