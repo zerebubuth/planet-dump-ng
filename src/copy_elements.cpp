@@ -20,7 +20,9 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/iostreams/stream.hpp>
-#include <boost/iostreams/filter/gzip.hpp>
+// include vendored later header to deal with https://svn.boost.org/trac/boost/ticket/5237
+// #include <boost/iostreams/filter/gzip.hpp>
+#include "vendor/boost/iostreams/filter/gzip.hpp"
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <boost/iostreams/operations.hpp>
 #include <fstream>
@@ -74,16 +76,16 @@ struct thread_writer {
 template <typename T>
 struct db_reader {
   explicit db_reader(const std::string &subdir) : m_end(false) {
-    std::string file_name = (boost::format("%1$s/final_%2$08x.data") % subdir % 0).str();
-    if (!fs::exists(file_name)) {
-      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("File '%1%' does not exist.") % file_name).str()));
+    m_file_name = (boost::format("%1$s/final_%2$08x.data") % subdir % 0).str();
+    if (!fs::exists(m_file_name)) {
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("File '%1%' does not exist.") % m_file_name).str()));
     }
-    m_file.open(file_name.c_str());
+    m_file.open(m_file_name.c_str());
     if (!m_file.is_open()) {
-      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Unable to open '%1%'.") % file_name).str()));
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Unable to open '%1%'.") % m_file_name).str()));
     }
     if (!m_file.good()) {
-      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("File '%1%' is open, but not good.") % file_name).str()));
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("File '%1%' is open, but not good.") % m_file_name).str()));
     }
 
     m_stream.push(bio::gzip_decompressor());
@@ -115,6 +117,7 @@ struct db_reader {
 
 private:
   bool m_end;
+  std::string m_file_name;
   std::ifstream m_file;
   bio::filtering_streambuf<bio::input> m_stream;
 };

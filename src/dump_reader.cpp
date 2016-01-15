@@ -11,7 +11,9 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/iostreams/stream.hpp>
-#include <boost/iostreams/filter/gzip.hpp>
+// include vendored later header to deal with https://svn.boost.org/trac/boost/ticket/5237
+// #include <boost/iostreams/filter/gzip.hpp>
+#include "vendor/boost/iostreams/filter/gzip.hpp"
 #include <boost/iostreams/filtering_streambuf.hpp>
 #include <boost/iostreams/operations.hpp>
 #include <boost/thread.hpp>
@@ -289,17 +291,18 @@ private:
 };
 
 struct block_writer : public boost::noncopyable {
-  block_writer(const std::string &subdir, const std::string &bit, size_t block_counter) {
-    std::string file_name = (boost::format("%1$s/%2$s_%3$08x.data") % subdir % bit % block_counter).str();
-    if (fs::exists(file_name)) {
-      fs::remove(file_name);
+  block_writer(const std::string &subdir, const std::string &bit, size_t block_counter)
+    : m_anything_written(false) {
+    m_file_name = (boost::format("%1$s/%2$s_%3$08x.data") % subdir % bit % block_counter).str();
+    if (fs::exists(m_file_name)) {
+      fs::remove(m_file_name);
     }
-    m_out.open(file_name.c_str());
+    m_out.open(m_file_name.c_str());
     if (!m_out.is_open()) {
-      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Unable to open '%1%'.") % file_name).str()));
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Unable to open '%1%'.") % m_file_name).str()));
     }
     if (!m_out.good()) {
-      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("File '%1%' is open, but not good.") % file_name).str()));
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("File '%1%' is open, but not good.") % m_file_name).str()));
     }
 
     m_stream.push(bio::gzip_compressor(1));
@@ -314,6 +317,7 @@ struct block_writer : public boost::noncopyable {
   }
 
   ~block_writer() {
+    bio::flush(m_stream);
     bio::close(m_stream);
     m_out.close();
   }
@@ -326,9 +330,12 @@ struct block_writer : public boost::noncopyable {
     bio::write(m_stream, (const char *)(&val_size), sizeof(uint16_t));
     bio::write(m_stream, k.c_str(), k.size());
     bio::write(m_stream, v.c_str(), v.size());
+    m_anything_written = true;
   }
 
 private:
+  bool m_anything_written;
+  std::string m_file_name;
   std::ofstream m_out;
   bio::filtering_streambuf<bio::output> m_stream;
 };
