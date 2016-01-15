@@ -38,10 +38,10 @@ struct shell_escape_char {
  * happily *output* them, which is also a problem for anyone reading
  * from the API :-(
  */
-std::string kill_xml_bad_chars(const std::string &s) {
+std::string replace_xml_bad_chars(const std::string &s) {
   const size_t size = s.size();
   std::string output(size, '\0');
-  
+
   for (size_t i = 0; i < size; ++i) {
     char c = s[i];
     if ((c >= 0x00) && (c < 0x20) && (c != 0x09) && (c != 0x0a) && (c != 0x0d)) {
@@ -51,7 +51,7 @@ std::string kill_xml_bad_chars(const std::string &s) {
     }
     output[i] = c;
   }
-  
+
   return output;
 }
 
@@ -291,7 +291,7 @@ void xml_writer::pimpl::attribute(const char *name, const pt::ptime &t) {
 }
 
 void xml_writer::pimpl::attribute(const char *name, const char *s) {
-  std::string fixed = kill_xml_bad_chars(s);
+  std::string fixed = replace_xml_bad_chars(s);
   if (xmlTextWriterWriteAttribute(m_writer, 
                                   BAD_CAST name,
                                   BAD_CAST fixed.c_str()) < 0) {
@@ -300,7 +300,7 @@ void xml_writer::pimpl::attribute(const char *name, const char *s) {
 }
 
 void xml_writer::pimpl::attribute(const char *name, const std::string &s) {
-  std::string fixed = kill_xml_bad_chars(s);
+  std::string fixed = replace_xml_bad_chars(s);
   if (xmlTextWriterWriteAttribute(m_writer, 
                                   BAD_CAST name,
                                   BAD_CAST fixed.c_str()) < 0) {
@@ -315,7 +315,8 @@ void xml_writer::pimpl::end() {
 }
 
 void xml_writer::pimpl::text(const std::string &t) {
-  if (xmlTextWriterWriteString(m_writer, BAD_CAST t.c_str()) < 0) {
+  std::string fixed = replace_xml_bad_chars(t);
+  if (xmlTextWriterWriteString(m_writer, BAD_CAST fixed.c_str()) < 0) {
     BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write text to XML."));
   }
 }
