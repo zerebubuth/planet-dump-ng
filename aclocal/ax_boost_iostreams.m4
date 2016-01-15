@@ -75,6 +75,7 @@ AC_DEFUN([AX_BOOST_IOSTREAMS],
                              ax_cv_boost_iostreams=yes, ax_cv_boost_iostreams=no)
          AC_LANG_POP([C++])
 		])
+		ax_lib=""
 		if test "x$ax_cv_boost_iostreams" = "xyes"; then
 			AC_DEFINE(HAVE_BOOST_IOSTREAMS,,[define if the Boost::IOStreams library is available])
             BOOSTLIBDIR=`echo $BOOST_LDFLAGS | sed -e 's/@<:@^\/@:>@*//'`

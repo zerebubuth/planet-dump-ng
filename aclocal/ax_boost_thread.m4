@@ -82,6 +82,7 @@ AC_DEFUN([AX_BOOST_THREAD],
 			 CXXFLAGS=$CXXFLAGS_SAVE
              AC_LANG_POP([C++])
 		])
+		ax_lib=""
 		if test "x$ax_cv_boost_thread" = "xyes"; then
            if test "x$host_os" = "xsolaris" ; then
 			  BOOST_CPPFLAGS="-pthreads $BOOST_CPPFLAGS"
