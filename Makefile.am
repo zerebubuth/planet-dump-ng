@@ -8,7 +8,8 @@ TESTS = \
 	test/changesets.xml.case \
 	test/changesets-badchar.xml.case \
 	test/discussions.xml.case \
-	test/discussions-badchar.xml.case
+	test/discussions-badchar.xml.case \
+	test/discussions-long-comment.xml.case
 TEST_EXTENSIONS = .case
 CASE_LOG_COMPILER = test/test-case-runner.sh
 

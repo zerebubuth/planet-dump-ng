@@ -98,17 +98,27 @@ struct db_reader {
   }
 
   bool operator()(T &t) {
+    static const uint16_t max_uint16_t = std::numeric_limits<uint16_t>::max();
     if (m_end) { return false; }
-    uint16_t ksz, vsz;
+    uint16_t ksz = 0, vsz = 0;
+    uint64_t kextsz = 0, vextsz = 0;
     
     if (bio::read(m_stream, (char *)&ksz, sizeof(uint16_t)) != sizeof(uint16_t)) { m_end = true; return false; }
+    if (ksz == max_uint16_t) {
+      if (bio::read(m_stream, (char *)&kextsz, sizeof(uint64_t)) != sizeof(uint64_t)) { m_end = true; return false; }
+    }
     if (bio::read(m_stream, (char *)&vsz, sizeof(uint16_t)) != sizeof(uint16_t)) { m_end = true; return false; }
+    if (vsz == max_uint16_t) {
+      if (bio::read(m_stream, (char *)&vextsz, sizeof(uint64_t)) != sizeof(uint64_t)) { m_end = true; return false; }
+    }
 
+    size_t key_size = (ksz == max_uint16_t) ? size_t(kextsz) : size_t(ksz);
+    size_t val_size = (vsz == max_uint16_t) ? size_t(vextsz) : size_t(vsz);
     std::string k, v;
-    k.resize(ksz);
-    if (bio::read(m_stream, &k[0], ksz) != ksz) { m_end = true; return false; }
-    v.resize(vsz);
-    if (bio::read(m_stream, &v[0], vsz) != vsz) { m_end = true; return false; }
+    k.resize(key_size);
+    if (bio::read(m_stream, &k[0], key_size) != key_size) { m_end = true; return false; }
+    v.resize(val_size);
+    if (bio::read(m_stream, &v[0], val_size) != val_size) { m_end = true; return false; }
 
     insert_kv(t, k, v);
 

@@ -269,15 +269,25 @@ struct block_reader : public boost::noncopyable {
   const kv_pair_t &value() { return m_current; }
 
   void next() {
-    uint16_t ksz, vsz;
+    static const uint16_t max_uint16_t = std::numeric_limits<uint16_t>::max();
+    uint16_t ksz = 0, vsz = 0;
+    uint64_t kextsz = 0, vextsz = 0;
     
     if (bio::read(m_stream, (char *)&ksz, sizeof(uint16_t)) != sizeof(uint16_t)) { m_end = true; return; }
+    if (ksz == max_uint16_t) {
+      if (bio::read(m_stream, (char *)&kextsz, sizeof(uint64_t)) != sizeof(uint64_t)) { m_end = true; return; }
+    }
     if (bio::read(m_stream, (char *)&vsz, sizeof(uint16_t)) != sizeof(uint16_t)) { m_end = true; return; }
+    if (vsz == max_uint16_t) {
+      if (bio::read(m_stream, (char *)&vextsz, sizeof(uint64_t)) != sizeof(uint64_t)) { m_end = true; return; }
+    }
 
-    m_current.first.resize(ksz);
-    if (bio::read(m_stream, &m_current.first[0], ksz) != ksz) { m_end = true; return; }
-    m_current.second.resize(vsz);
-    if (bio::read(m_stream, &m_current.second[0], vsz) != vsz) { m_end = true; return; }
+    size_t key_size = (ksz == max_uint16_t) ? size_t(kextsz) : size_t(ksz);
+    size_t val_size = (vsz == max_uint16_t) ? size_t(vextsz) : size_t(vsz);
+    m_current.first.resize(key_size);
+    if (bio::read(m_stream, &m_current.first[0], key_size) != key_size) { m_end = true; return; }
+    m_current.second.resize(val_size);
+    if (bio::read(m_stream, &m_current.second[0], val_size) != val_size) { m_end = true; return; }
   }
 
   const std::string &file_name() const { return m_file_name; }
@@ -323,11 +333,35 @@ struct block_writer : public boost::noncopyable {
   }
 
   inline void operator()(const kv_pair_t &kv) {
+    static const size_t max_uint16_t = size_t(std::numeric_limits<uint16_t>::max());
     const std::string &k = kv.first;
     const std::string &v = kv.second;
-    uint16_t key_size = uint16_t(k.size()), val_size = uint16_t(v.size());
+
+    uint16_t key_size = 0, val_size = 0;
+    uint64_t key_extra_size = 0, val_extra_size = 0;
+
+    if (k.size() >= max_uint16_t) {
+      key_size = std::numeric_limits<uint16_t>::max();
+      key_extra_size = uint64_t(k.size());
+    } else {
+      key_size = uint16_t(k.size());
+    }
+
+    if (v.size() >= max_uint16_t) {
+      val_size = std::numeric_limits<uint16_t>::max();
+      val_extra_size = uint64_t(v.size());
+    } else {
+      val_size = uint16_t(v.size());
+    }
+
     bio::write(m_stream, (const char *)(&key_size), sizeof(uint16_t));
+    if (key_extra_size > 0) {
+      bio::write(m_stream, (const char *)(&key_extra_size), sizeof(uint64_t));
+    }
     bio::write(m_stream, (const char *)(&val_size), sizeof(uint16_t));
+    if (val_extra_size > 0) {
+      bio::write(m_stream, (const char *)(&val_extra_size), sizeof(uint64_t));
+    }
     bio::write(m_stream, k.c_str(), k.size());
     bio::write(m_stream, v.c_str(), v.size());
     m_anything_written = true;
@@ -494,13 +528,15 @@ struct db_writer : public boost::noncopyable {
   }
   
   void put(const std::string &k, const std::string &v) {
-    if (k.size() > size_t(std::numeric_limits<uint16_t>::max())) {
-      BOOST_THROW_EXCEPTION(std::runtime_error("Key too large for uint16_t."));
+    static const size_t max_uint16_t = size_t(std::numeric_limits<uint16_t>::max());
+    size_t extra_bytes = 0;
+    if (k.size() >= max_uint16_t) {
+      extra_bytes += sizeof(uint64_t);
     }
-    if (v.size() > size_t(std::numeric_limits<uint16_t>::max())) {
-      BOOST_THROW_EXCEPTION(std::runtime_error("Value too large for uint16_t."));
+    if (v.size() >= max_uint16_t) {
+      extra_bytes += sizeof(uint64_t);
     }
-    size_t bytes = k.size() + v.size() + 2 * sizeof(uint16_t);
+    size_t bytes = k.size() + v.size() + extra_bytes + 2 * sizeof(uint16_t);
     if ((m_bytes_this_block + bytes) > MAX_MERGESORT_BLOCK_SIZE) {
       flush_block();
     }
