@@ -496,7 +496,14 @@ void xml_writer::changesets(const std::vector<changeset> &css,
         if ((comment_itr->changeset_id == cs.id) &&
             (comment_itr->visible)) {
           user_map_t::const_iterator author_itr = m_users.find(comment_itr->author_id);
-          m_impl->add_comment(*comment_itr, author_itr->second);
+          if (author_itr == m_users.end()) {
+            // a user with data_public managed to make a comment?
+            std::cerr << "User " << comment_itr->author_id << " with "
+                      << "data_public=false made a comment on changeset "
+                      << comment_itr->changeset_id << "? Ignoring.\n";
+          } else {
+            m_impl->add_comment(*comment_itr, author_itr->second);
+          }
         }
       }
 
