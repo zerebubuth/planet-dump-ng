@@ -1,15 +1,18 @@
 Planet Dump (Next Generation)
 =============================
 
-Experimental next version of the planet dump tool for OpenStreetMap.
+Tool for converting an OpenStreetMap database dump into planet files.
 
-This planet dump program operates in a very different way from the
-previous one; rather than force the database server to keep a
-consistent context open for the duration of the dump, it instead uses
-a consistent dump from the database. This means that running the
-extraction from PostgreSQL dump file to planet file(s) is completely
-independent of the database server, and can be done on a disconnected
-machine without putting any load on any database.
+By operating on the database dump rather than a running server, this means that
+running the extraction from PostgreSQL dump file to planetfile(s) is completely
+independent of the database server, and can be done on a disconnected machine
+without putting any load on any database.
+
+The previous version of this tool required the database server to keep a
+consistent transaction context open for the duration of the dump, which would
+usually be several days. This created problems as the long-running transaction
+could get cancelled, meaning the planet dump would have to be started again
+from scratch.
 
 Building
 --------
@@ -35,7 +38,7 @@ After that, it should just be a matter of running:
     ./autogen.sh
     ./configure
     make
-  
+
 If you run into any issues with this, please file a bug on the github
 issues page for this project, giving as much detail as you can about
 the error and the environment it occurred in.
