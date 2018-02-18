@@ -6,8 +6,8 @@
 
 template <typename T>
 history_filter<T>::history_filter(const std::string &option_name, const boost::program_options::variables_map &options,
-                                  const user_map_t &user_map, const boost::posix_time::ptime &max_time)
-  : m_writer(new T(option_name, options, user_map, max_time, false)),
+                                  const user_map_t &user_map, const boost::posix_time::ptime &max_time, bool clean, bool include_comments)
+  : m_writer(new T(option_name, options, user_map, max_time, clean, include_comments)),
     m_left_over_nodes(boost::none),
     m_left_over_ways(boost::none),
     m_left_over_relations(boost::none) {

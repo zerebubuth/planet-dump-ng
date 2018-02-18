@@ -11,7 +11,7 @@
 
 class pbf_writer : public output_writer {
 public:
-  pbf_writer(const std::string &, const boost::program_options::variables_map &, const user_map_t &, const boost::posix_time::ptime &, bool = false);
+  pbf_writer(const std::string &, const boost::program_options::variables_map &, const user_map_t &, const boost::posix_time::ptime &, bool, bool = false);
   virtual ~pbf_writer();
 
   void changesets(const std::vector<changeset> &,

@@ -146,7 +146,7 @@ struct xml_writer::pimpl {
 
   void start_discussion();
   void end_discussion();
-  void add_comment(const changeset_comment &c, const std::string &display_name);
+  void add_comment(const changeset_comment &c, const std::string &display_name, bool clean);
 
   // flush & close output stream
   void finish();
@@ -343,10 +343,12 @@ void xml_writer::pimpl::end_discussion() {
   end();
 }
 
-void xml_writer::pimpl::add_comment(const changeset_comment &c, const std::string &display_name) {
+void xml_writer::pimpl::add_comment(const changeset_comment &c, const std::string &display_name, bool clean) {
   begin("comment");
-  attribute("uid", c.author_id);
-  attribute("user", display_name);
+  if (!clean) {
+      attribute("uid", c.author_id);
+      attribute("user", display_name);
+  }
   attribute("date", c.created_at);
   begin("text");
   text(c.body);
@@ -362,7 +364,7 @@ namespace {
 template <typename T>
 void write_common_attributes(const T &t, xml_writer::pimpl &impl, 
                              const xml_writer::changeset_map_t &changesets,
-                             const xml_writer::user_map_t &users) {
+                             const xml_writer::user_map_t &users, bool clean) {
   impl.attribute("timestamp", t.timestamp);
   impl.attribute("version", t.version);
   impl.attribute("changeset", t.changeset_id);
@@ -370,12 +372,14 @@ void write_common_attributes(const T &t, xml_writer::pimpl &impl,
   // at least the current planetdump script doesn't add them.
   if (impl.m_has_history) { impl.attribute("visible", t.visible); }
   
-  xml_writer::changeset_map_t::const_iterator cs_itr = changesets.find(t.changeset_id);
-  if (cs_itr != changesets.end()) {
-    xml_writer::user_map_t::const_iterator user_itr = users.find(*cs_itr);
-    if (user_itr != users.end()) {
-      impl.attribute("user", user_itr->second);
-      impl.attribute("uid", user_itr->first);
+  if (!clean) {
+    xml_writer::changeset_map_t::const_iterator cs_itr = changesets.find(t.changeset_id);
+    if (cs_itr != changesets.end()) {
+      xml_writer::user_map_t::const_iterator user_itr = users.find(*cs_itr);
+      if (user_itr != users.end()) {
+        impl.attribute("user", user_itr->second);
+        impl.attribute("uid", user_itr->first);
+      }
     }
   }
 }
@@ -402,11 +406,12 @@ void write_tags(int64_t id, int64_t version,
 } // anonymous namespace
 
 xml_writer::xml_writer(const std::string &file_name, const boost::program_options::variables_map &options,
-                       const user_map_t &users, const pt::ptime &max_time, bool has_history,
-                       bool has_changeset_discussions)
+                       const user_map_t &users, const pt::ptime &max_time, bool clean,
+                       bool has_history, bool has_changeset_discussions)
   : m_impl(new pimpl(file_name, options, max_time, has_history))
   , m_users(users)
   , m_has_changeset_discussions(has_changeset_discussions)
+  , m_clean(clean)
   , m_generator_name(options["generator"].as<std::string>()) {
 
   m_impl->begin("osm");
@@ -448,11 +453,15 @@ void xml_writer::changesets(const std::vector<changeset> &css,
     }
     m_impl->attribute("open", open);
 
-    user_map_t::const_iterator user_itr = m_users.find(cs.uid);
-    if (user_itr != m_users.end()) {
-      m_impl->attribute("user", user_itr->second);
-      m_impl->attribute("uid", user_itr->first);
-      m_changesets.insert(std::make_pair(cs.id, user_itr->first));
+    if (!m_clean) {
+      user_map_t::const_iterator user_itr = m_users.find(cs.uid);
+      if (user_itr != m_users.end()) {
+        m_impl->attribute("user", user_itr->second);
+        m_impl->attribute("uid", user_itr->first);
+        // it is ok to only insert this in the "!m_clean" case since
+        // future uses are tied to !m_clean too
+        m_changesets.insert(std::make_pair(cs.id, user_itr->first));
+      }
     }
     
     if (cs.min_lat && cs.max_lat && cs.min_lon && cs.max_lon) {
@@ -502,7 +511,7 @@ void xml_writer::changesets(const std::vector<changeset> &css,
                       << "data_public=false made a comment on changeset "
                       << comment_itr->changeset_id << "? Ignoring.\n";
           } else {
-            m_impl->add_comment(*comment_itr, author_itr->second);
+            m_impl->add_comment(*comment_itr, author_itr->second, m_clean);
           }
         }
       }
@@ -531,7 +540,7 @@ void xml_writer::nodes(const std::vector<node> &ns,
       m_impl->attribute("lon", double(n.longitude) / SCALE);
     }
 
-    write_common_attributes<node>(n, *m_impl, m_changesets, m_users);
+    write_common_attributes<node>(n, *m_impl, m_changesets, m_users, m_clean);
 
     // deleted nodes shouldn't have tags.
     if (n.visible) {
@@ -552,7 +561,7 @@ void xml_writer::ways(const std::vector<way> &ws,
     m_impl->begin("way");
     m_impl->attribute("id", w.id);
 
-    write_common_attributes<way>(w, *m_impl, m_changesets, m_users);
+    write_common_attributes<way>(w, *m_impl, m_changesets, m_users, m_clean);
 
     // deleted ways shouldn't have nodes or tags, or at least we
     // shouldn't output them.
@@ -585,7 +594,7 @@ void xml_writer::relations(const std::vector<relation> &rs,
   BOOST_FOREACH(const relation &r, rs) {
     m_impl->begin("relation");
     m_impl->attribute("id", r.id);
-    write_common_attributes<relation>(r, *m_impl, m_changesets, m_users);
+    write_common_attributes<relation>(r, *m_impl, m_changesets, m_users, m_clean);
 
     // deleted relations don't have members or tags, or shouldn't have
     // them output anyway.

@@ -16,7 +16,7 @@ public:
 
   xml_writer(const std::string &, const boost::program_options::variables_map &, const user_map_t &,
              const boost::posix_time::ptime &max_time,
-             bool has_history = false, bool has_changeset_discussions = false);
+             bool clean = false, bool has_history = false, bool has_changeset_discussions = false);
   virtual ~xml_writer();
 
   void changesets(const std::vector<changeset> &,
@@ -33,6 +33,7 @@ private:
   boost::scoped_ptr<pimpl> m_impl;
   const user_map_t &m_users;
   bool m_has_changeset_discussions;
+  bool m_clean;
   std::string m_generator_name;
   changeset_map_t m_changesets;
 };

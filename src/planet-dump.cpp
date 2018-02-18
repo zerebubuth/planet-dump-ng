@@ -37,6 +37,13 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
     ("changesets,C", po::value<std::string>(), "changeset XML output file")
     ("changeset-discussions,D", po::value<std::string>(),
      "changeset discussions XML output file")
+    ("xml-clean", po::value<std::string>(), "planet XML output file (without history or user data)")
+    ("history-xml-clean", po::value<std::string>(), "history XML output file (without user data)")
+    ("pbf-clean", po::value<std::string>(), "planet PBF output file (without history or user data)")
+    ("history-pbf-clean", po::value<std::string>(), "history PBF output file (without user data)")
+    ("changesets-clean", po::value<std::string>(), "changeset XML output file (without user data)")
+    ("changeset-discussions-clean", po::value<std::string>(),
+     "changeset discussions XML output file (without user data)")
     ("dense-nodes,d", po::value<bool>()->default_value("true"), "use dense nodes for PBF output")
     ("dump-file,f", po::value<std::string>(), "PostgreSQL table dump to read")
     ("generator", po::value<std::string>()->default_value(PACKAGE_STRING),
@@ -61,11 +68,14 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
 
   if ((vm.count("xml") + vm.count("history-xml") +
        vm.count("pbf") + vm.count("history-pbf") + 
-       vm.count("changesets") + vm.count("changeset-discussions")) == 0) {
+       vm.count("changesets") + vm.count("changeset-discussions") +
+       vm.count("xml-clean") + vm.count("history-xml-clean") +
+       vm.count("pbf-clean") + vm.count("history-pbf-clean") + 
+       vm.count("changesets-clean") + vm.count("changeset-discussions-clean")) == 0) {
     std::cerr <<
       "No output file provided! You must provide one or more of "
-      "--xml, --history-xml, --pbf, --history-pbf, --changesets or "
-      "--changeset-discussions to get output.\n\n";
+      "--xml, --history-xml, --pbf, --history-pbf, --changesets, "
+      "--changeset-discussions (or the respective -clean options) to get output.\n\n";
     std::cerr << desc << std::endl;
     exit(1);
   }
@@ -135,27 +145,63 @@ int main(int argc, char *argv[]) {
     std::vector<boost::shared_ptr<output_writer> > writers;
     if (options.count("history-xml")) {
       std::string output_file = options["history-xml"].as<std::string>();
-      writers.push_back(boost::shared_ptr<output_writer>(new xml_writer(output_file, options, display_name_map, max_time, true)));
+      writers.push_back(boost::shared_ptr<output_writer>(new xml_writer(output_file, options, 
+        display_name_map, max_time, /* clean */ false, /* history */ true)));
+    }
+    if (options.count("history-xml-clean")) {
+      std::string output_file = options["history-xml-clean"].as<std::string>();
+      writers.push_back(boost::shared_ptr<output_writer>(new xml_writer(output_file, options, 
+        display_name_map, max_time, /* clean */ true, /* history */ true)));
     }
     if (options.count("history-pbf")) {
       std::string output_file = options["history-pbf"].as<std::string>();
-      writers.push_back(boost::shared_ptr<output_writer>(new pbf_writer(output_file, options, display_name_map, max_time, true)));
+      writers.push_back(boost::shared_ptr<output_writer>(new pbf_writer(output_file, options, 
+        display_name_map, max_time, /* clean */ false, /* history */ true)));
+    }
+    if (options.count("history-pbf-clean")) {
+      std::string output_file = options["history-pbf-clean"].as<std::string>();
+      writers.push_back(boost::shared_ptr<output_writer>(new pbf_writer(output_file, options, 
+        display_name_map, max_time, /* clean */ true, /* history */ true)));
     }
     if (options.count("xml")) {
       std::string output_file = options["xml"].as<std::string>();
-      writers.push_back(boost::shared_ptr<output_writer>(new history_filter<xml_writer>(output_file, options, display_name_map, max_time)));
+      writers.push_back(boost::shared_ptr<output_writer>(new history_filter<xml_writer>(output_file, options, 
+        display_name_map, max_time, /* clean */ false, /* history */ false)));
+    }
+    if (options.count("xml-clean")) {
+      std::string output_file = options["xml-clean"].as<std::string>();
+      writers.push_back(boost::shared_ptr<output_writer>(new history_filter<xml_writer>(output_file, options, 
+        display_name_map, max_time, /* clean */ true, /* history */ false)));
     }
     if (options.count("pbf")) {
       std::string output_file = options["pbf"].as<std::string>();
-      writers.push_back(boost::shared_ptr<output_writer>(new history_filter<pbf_writer>(output_file, options, display_name_map, max_time)));
+      writers.push_back(boost::shared_ptr<output_writer>(new history_filter<pbf_writer>(output_file, options, 
+        display_name_map, max_time, /* clean */ false, /* history */ false)));
+    }
+    if (options.count("pbf-clean")) {
+      std::string output_file = options["pbf-clean"].as<std::string>();
+      writers.push_back(boost::shared_ptr<output_writer>(new history_filter<pbf_writer>(output_file, options, 
+        display_name_map, max_time, /* clean */ true, /* history */ false)));
     }
     if (options.count("changesets")) {
       std::string output_file = options["changesets"].as<std::string>();
-      writers.push_back(boost::shared_ptr<output_writer>(new changeset_filter<xml_writer>(output_file, options, display_name_map, max_time, false)));
+      writers.push_back(boost::shared_ptr<output_writer>(new changeset_filter<xml_writer>(output_file, options, 
+        display_name_map, max_time, /* clean */ false)));
+    }
+    if (options.count("changesets-clean")) {
+      std::string output_file = options["changesets-clean"].as<std::string>();
+      writers.push_back(boost::shared_ptr<output_writer>(new changeset_filter<xml_writer>(output_file, options, 
+        display_name_map, max_time, /* clean */ true)));
     }
     if (options.count("changeset-discussions")) {
       std::string output_file = options["changeset-discussions"].as<std::string>();
-      writers.push_back(boost::shared_ptr<output_writer>(new changeset_filter<xml_writer>(output_file, options, display_name_map, max_time, true)));
+      writers.push_back(boost::shared_ptr<output_writer>(new changeset_filter<xml_writer>(output_file, options, 
+        display_name_map, max_time, /* clean */ false, /* include discussions */ true)));
+    }
+    if (options.count("changeset-discussions-clean")) {
+      std::string output_file = options["changeset-discussions-clean"].as<std::string>();
+      writers.push_back(boost::shared_ptr<output_writer>(new changeset_filter<xml_writer>(output_file, options, 
+        display_name_map, max_time, /* clean */ true, /* include discussions */ true)));
     }
 
     std::cerr << "Writing changesets..." << std::endl;

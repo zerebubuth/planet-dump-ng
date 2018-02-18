@@ -57,6 +57,9 @@ somewhere with plenty of fast disk space. Existing files may interfere
 with the operation of the program, so it's best to run it in its own,
 clean directory.
 
+All files can be created in a default version (includes "uid" and
+"user" fields), and a "clean" version (without these fields).
+
 Architecture
 ------------
 

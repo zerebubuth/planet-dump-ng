@@ -13,7 +13,7 @@
  */
 template <typename T>
 struct history_filter : public output_writer {
-  history_filter(const std::string &, const boost::program_options::variables_map &, const user_map_t &, const boost::posix_time::ptime &);
+  history_filter(const std::string &, const boost::program_options::variables_map &, const user_map_t &, const boost::posix_time::ptime &, bool, bool);
   virtual ~history_filter();
 
   void changesets(const std::vector<changeset> &,
