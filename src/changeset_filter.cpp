@@ -6,9 +6,9 @@
 
 template <typename T>
 changeset_filter<T>::changeset_filter(const std::string &option_name, const boost::program_options::variables_map &options,
-                                      const user_map_t &user_map, const boost::posix_time::ptime &max_time,
-                                      bool include_discussions)
-  : m_writer(new T(option_name, options, user_map, max_time, false, include_discussions)) {
+                                      const user_map_t &user_map, const boost::posix_time::ptime &max_time, user_info_level uil,
+                                      historical_versions hv, changeset_discussions cd)
+  : m_writer(new T(option_name, options, user_map, max_time, uil, historical_versions::NONE, cd)) {
 }
 
 template <typename T>

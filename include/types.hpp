@@ -239,4 +239,19 @@ BOOST_FUSION_ADAPT_STRUCT(
   (boost::optional<int64_t>, redaction_id)
   )
 
+enum class user_info_level {
+  FULL,
+  ANON
+};
+
+enum class historical_versions {
+  NONE,
+  FULL
+};
+
+enum class changeset_discussions {
+  NONE,
+  FULL
+};
+
 #endif /* TYPES_HPP */

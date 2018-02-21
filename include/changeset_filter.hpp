@@ -15,8 +15,7 @@
 template <typename T>
 struct changeset_filter : public output_writer {
   changeset_filter(const std::string &, const boost::program_options::variables_map &,
-                   const user_map_t &, const boost::posix_time::ptime &,
-                   bool include_discussions);
+                   const user_map_t &, const boost::posix_time::ptime &, user_info_level, historical_versions, changeset_discussions);
   virtual ~changeset_filter();
 
   void changesets(const std::vector<changeset> &,

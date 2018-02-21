@@ -99,7 +99,7 @@ struct pbf_writer::pimpl {
     element_RELATION
   };
 
-  pimpl(const std::string &out_name, const bt::ptime &now, bool history_format,
+  pimpl(const std::string &out_name, const bt::ptime &now, user_info_level uil, historical_versions hv,
         const user_map_t &user_map, const boost::program_options::variables_map &options) 
     : num_elements(0), buffer(), out(out_name.c_str()), str_table(),
       pblock(), pgroup(pblock.add_primitivegroup()), 
@@ -109,14 +109,14 @@ struct pbf_writer::pimpl {
       m_last_way_node_ref(0),
       m_last_relation_member_ref(0),
       m_est_pblock_size(0),
-      m_history_format(history_format),
+      m_historical_versions(hv),
+      m_user_info_level(uil),
       m_user_map(user_map),
       m_dense_nodes(options["dense-nodes"].as<bool>()),
       m_dense_section(NULL), 
       m_changeset_user_map(),
       m_recheck_elements(int(element_RELATION) + 1),
       m_generator_name(options["generator"].as<std::string>()) {
-
     // different re-check limits per type so that we can better
     // adapt to the different sizes of elements, and hit the
     // byte limit without overflowing it.
@@ -155,7 +155,7 @@ struct pbf_writer::pimpl {
     bbox->set_bottom( -90L * lonlat_resolution);
 
     header.add_required_features("OsmSchema-V" OSM_VERSION_TEXT);
-    if (m_history_format) { 
+    if (m_historical_versions == historical_versions::FULL) { 
       header.add_required_features("HistoricalInformation");
     }
     if (m_dense_nodes) {
@@ -283,7 +283,7 @@ struct pbf_writer::pimpl {
     ASSERT_EQ(num_ids, num_versions);
     ASSERT_EQ(num_ids, num_timestamps);
     ASSERT_EQ(num_ids, num_changesets);
-    if (m_history_format) {
+    if (m_historical_versions == historical_versions::FULL) {
       ASSERT_EQ(num_ids, num_visibles);
     }
     ASSERT_EQ(num_ids, num_uids);
@@ -299,23 +299,27 @@ struct pbf_writer::pimpl {
     info->set_changeset(t.changeset_id);
     // if we are doing a history file, and the default of visible=true
     // doesn't apply, then we need to explicitly set visible=false.
-    if (m_history_format && !t.visible) {
+    if ((m_historical_versions == historical_versions::FULL) && !t.visible) {
       info->set_visible(t.visible);
     }
     // set the uid and user information, if the user is public
-    std::map<int64_t, int64_t>::const_iterator itr = m_changeset_user_map.find(t.changeset_id);
-    if (itr != m_changeset_user_map.end()) {
-      user_map_t::const_iterator jtr = m_user_map.find(itr->second);
-      if (jtr != m_user_map.end()) {
-        info->set_uid(jtr->first);
-        info->set_user_sid(str_table(jtr->second));
+    if (m_user_info_level == user_info_level::FULL) {
+      std::map<int64_t, int64_t>::const_iterator itr = m_changeset_user_map.find(t.changeset_id);
+      if (itr != m_changeset_user_map.end()) {
+        user_map_t::const_iterator jtr = m_user_map.find(itr->second);
+        if (jtr != m_user_map.end()) {
+          info->set_uid(jtr->first);
+          info->set_user_sid(str_table(jtr->second));
+        }
+        // for anonymous, just leave the uid & user_sid blank.
+      } else {
+        std::ostringstream out;
+        out << "Unable to find changeset " << t.changeset_id 
+            << " in changeset-to-user map.";
+        BOOST_THROW_EXCEPTION(std::runtime_error(out.str()));
       }
-      // for anonymous, just leave the uid & user_sid blank.
     } else {
-      std::ostringstream out;
-      out << "Unable to find changeset " << t.changeset_id 
-          << " in changeset-to-user map.";
-      BOOST_THROW_EXCEPTION(std::runtime_error(out.str()));
+      // for no user info, just leave the uid & user_sid blank.
     }
   }
 
@@ -360,30 +364,33 @@ struct pbf_writer::pimpl {
     // if we are doing a history file, we need to set the visible flag
     // for all entries in the dense node table, as this array is indexed
     // into by position to get the visibility flag.
-    if (m_history_format) {
+    if (m_historical_versions == historical_versions::FULL) {
       info->add_visible(n.visible);
     }
     // set the uid and user information, if the user is public
-    std::map<int64_t, int64_t>::const_iterator itr = m_changeset_user_map.find(n.changeset_id);
-    if (itr != m_changeset_user_map.end()) {
-      user_map_t::const_iterator jtr = m_user_map.find(itr->second);
-      if (jtr != m_user_map.end()) {
-        info->add_uid(delta<int32_t>(m_last_dense_uid, jtr->first));
-        info->add_user_sid(delta<int32_t>(m_last_dense_user_sid, str_table(jtr->second)));
+    std::map<int64_t, int64_t>::const_iterator itr = m_changeset_user_map.end();
+    user_map_t::const_iterator jtr = m_user_map.end();
+    if (m_user_info_level == user_info_level::FULL) {
+      itr = m_changeset_user_map.find(n.changeset_id);
+      if (itr == m_changeset_user_map.end()) {
+        std::ostringstream out;
+        out << "Unable to find changeset " << n.changeset_id 
+            << " in changeset-to-user map for dense node.";
+        BOOST_THROW_EXCEPTION(std::runtime_error(out.str()));
       }
-      else
-      {
-        // anonymous user - note that the array requires a value, but
-        // it doesn't appear to be documented anywhere what the "null"
-        // value should be. apparently -1 is no good, so use 0.
-        info->add_uid(delta<int32_t>(m_last_dense_uid, 0));
-        info->add_user_sid(delta<int32_t>(m_last_dense_user_sid, str_table("")));
-      }
-    } else {
-      std::ostringstream out;
-      out << "Unable to find changeset " << n.changeset_id 
-          << " in changeset-to-user map for dense node.";
-      BOOST_THROW_EXCEPTION(std::runtime_error(out.str()));
+      jtr = m_user_map.find(itr->second);
+    }
+    if (jtr != m_user_map.end()) {
+      info->add_uid(delta<int32_t>(m_last_dense_uid, jtr->first));
+      info->add_user_sid(delta<int32_t>(m_last_dense_user_sid, str_table(jtr->second)));
+    }
+    else
+    {
+      // anonymous user - note that the array requires a value, but
+      // it doesn't appear to be documented anywhere what the "null"
+      // value should be. apparently -1 is no good, so use 0.
+      info->add_uid(delta<int32_t>(m_last_dense_uid, 0));
+      info->add_user_sid(delta<int32_t>(m_last_dense_user_sid, str_table("")));
     }
     ++num_elements;
   }
@@ -498,7 +505,8 @@ struct pbf_writer::pimpl {
   element_type m_current_element;
   int64_t m_last_way_node_ref, m_last_relation_member_ref;
   int m_est_pblock_size;
-  bool m_history_format;
+  historical_versions m_historical_versions;
+  user_info_level m_user_info_level;
   user_map_t m_user_map;
   bool m_dense_nodes;
   OSMPBF::DenseNodes* m_dense_section;
@@ -521,8 +529,8 @@ private:
 };
 
 pbf_writer::pbf_writer(const std::string &file_name, const boost::program_options::variables_map &options, 
-                       const user_map_t &users, const boost::posix_time::ptime &now, bool history_format)
-  : m_impl(new pimpl(file_name, now, history_format, users, options)) {
+                       const user_map_t &users, const boost::posix_time::ptime &now, user_info_level uil, historical_versions hv, changeset_discussions cd)
+  : m_impl(new pimpl(file_name, now, uil, hv, users, options)) {
 }
 
 pbf_writer::~pbf_writer() {
