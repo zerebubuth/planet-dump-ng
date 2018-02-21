@@ -303,23 +303,22 @@ struct pbf_writer::pimpl {
       info->set_visible(t.visible);
     }
     // set the uid and user information, if the user is public
+    user_map_t::const_iterator jtr = m_user_map.end();
     if (m_user_info_level == user_info_level::FULL) {
       std::map<int64_t, int64_t>::const_iterator itr = m_changeset_user_map.find(t.changeset_id);
-      if (itr != m_changeset_user_map.end()) {
-        user_map_t::const_iterator jtr = m_user_map.find(itr->second);
-        if (jtr != m_user_map.end()) {
-          info->set_uid(jtr->first);
-          info->set_user_sid(str_table(jtr->second));
-        }
-        // for anonymous, just leave the uid & user_sid blank.
-      } else {
+      if (itr == m_changeset_user_map.end()) {
         std::ostringstream out;
-        out << "Unable to find changeset " << t.changeset_id 
+        out << "Unable to find changeset " << t.changeset_id
             << " in changeset-to-user map.";
         BOOST_THROW_EXCEPTION(std::runtime_error(out.str()));
       }
+      jtr = m_user_map.find(itr->second);
+    }
+    if (jtr != m_user_map.end()) {
+      info->set_uid(jtr->first);
+      info->set_user_sid(str_table(jtr->second));
     } else {
-      // for no user info, just leave the uid & user_sid blank.
+      // for anonymous or no user info, just leave the uid & user_sid blank.
     }
   }
 

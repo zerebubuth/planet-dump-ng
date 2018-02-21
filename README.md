@@ -58,7 +58,7 @@ with the operation of the program, so it's best to run it in its own,
 clean directory.
 
 All files can be created in a default version (includes "uid" and
-"user" fields), and a "-no-userinfo" version (without these fields).
+"user" fields), and a "no-userinfo" version (without these fields).
 
 Architecture
 ------------
@@ -101,4 +101,3 @@ looking at "pg_dump" to see how it would best be done
 efficiently. While looking at "pg_dump", it became clear that what was
 really needed was just the dump itself - a dump which is produced
 regularly for backup purposes anyway.
-
