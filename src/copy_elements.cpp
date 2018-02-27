@@ -180,7 +180,7 @@ inline void fetch_associated<int>(int &, int64_t, int64_t, db_reader<int> &, std
 }
 
 template <typename T>
-inline bool is_redacted(const T &t) { return t.redaction_id ? true : false; }
+inline bool is_redacted(const T &t) { return bool(t.redaction_id); }
 
 template <> inline bool is_redacted<changeset>(const changeset &) { return false; }
 
