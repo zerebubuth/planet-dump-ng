@@ -154,7 +154,7 @@ struct copy_line
     using qi::lexeme;
     using qi::lit;
 
-    root = lit("COPY") >> lit(table_name) >> lit("(") >> (ident % lit(',')) >> lit(") FROM stdin;");
+    root = lit("COPY") >> -lit("public.") >> lit(table_name) >> lit("(") >> (ident % lit(',')) >> lit(") FROM stdin;");
     ident = (alpha >> *(alnum | char_('_'))) | (lit("\"") >> *(char_ - '"' - '\\') >> lit("\""));
   }
 
