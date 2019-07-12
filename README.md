@@ -81,7 +81,7 @@ members.
 
 In order that the system can output a planet file or a history planet
 file in the same run, all of this is generated from the history
-tables. This means a minor adjustment to how the "current" planet is
+tables. This means a minor adjustment to how the [previous planet scrip](https://github.com/openstreetmap/planetdump) was
 written, with a filter which drops any non-current version of an
 element and any current version which is deleted.
 
