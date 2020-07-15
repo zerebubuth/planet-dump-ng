@@ -28,6 +28,8 @@
 #include <boost/exception/error_info.hpp>
 #include <boost/weak_ptr.hpp>
 
+#include <semaphore.h>
+
 #define BATCH_SIZE (10240)
 #define MAX_MERGESORT_BLOCK_SIZE (67108864)
 
@@ -388,6 +390,7 @@ struct compare_first {
 };
 
 struct thread_control_block : public boost::noncopyable {
+  sem_t *m_sem;
   std::string m_subdir, m_prefix;
   size_t m_block_number;
   std::vector<kv_pair_t> m_strings;
@@ -395,14 +398,23 @@ struct thread_control_block : public boost::noncopyable {
   boost::shared_ptr<boost::thread> m_thread;
   boost::exception_ptr m_error;
 
-  thread_control_block(std::string subdir, std::string prefix, size_t block_number,
-                       std::vector<kv_pair_t> &strings,  
+  thread_control_block(sem_t *sem,
+                       std::string subdir, std::string prefix, size_t block_number,
+                       std::vector<kv_pair_t> &strings,
                        std::vector<boost::shared_ptr<thread_control_block> > waits = 
                        std::vector<boost::shared_ptr<thread_control_block> >())
-    : m_subdir(subdir), m_prefix(prefix), m_block_number(block_number), m_strings(), m_waits(waits),
+    : m_sem(sem), m_subdir(subdir), m_prefix(prefix), m_block_number(block_number), m_strings(), m_waits(waits),
       m_thread(), m_error() {
     std::swap(m_strings, strings);
     strings.clear();
+
+    // lock the semaphore now, before starting the thread, so that we block the
+    // dump reader thread's progress and prevent it spawning loads of threads.
+    int status = sem_wait(m_sem);
+    if (status != 0) {
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Failed to sem_wait, return = %1%.") % status).str()));
+    }
+
     m_thread = boost::make_shared<boost::thread>(boost::bind(&thread_control_block::run, boost::ref(*this)));
   }
 
@@ -411,6 +423,12 @@ struct thread_control_block : public boost::noncopyable {
   }
 
   static void run(thread_control_block &tcb) {
+    std::size_t sum = 0;
+    BOOST_FOREACH(const kv_pair_t &kv, tcb.m_strings) {
+      sum += sizeof(kv_pair_t) + kv.first.size() + kv.second.size();
+    }
+    sum += sizeof(m_strings);
+    std::cerr << "Starting thread with " << sum << " bytes" << std::endl;
     try {
       if (tcb.m_waits.size() > 0) {
         tcb.run_merge();
@@ -421,6 +439,11 @@ struct thread_control_block : public boost::noncopyable {
 
     } catch (...) {
       tcb.m_error = boost::current_exception();
+    }
+    std::cerr << "Finishing thread with " << sum << " bytes" << std::endl;
+    int status = sem_post(tcb.m_sem);
+    if (status != 0) {
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Failed to sem_post, return = %1%.") % status).str()));
     }
   }
 
@@ -493,6 +516,13 @@ struct db_writer : public boost::noncopyable {
     : m_subdir(table_name),
       m_block_counter(0),
       m_bytes_this_block(0) {
+    // TODO: configurable value? the memory usage should be *approximately*
+    // 64MB (MAX_MERGESORT_BLOCK_SIZE) * the number of threads, controlled by
+    // the semaphore below. so 1G in this case (* the number of tables).
+    int status = sem_init(&m_sem, 0, 16);
+    if (status != 0) {
+      BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Failed to sem_init, return = %1%.") % status).str()));
+    }
     fs::create_directories(m_subdir);
   }
   
@@ -545,6 +575,7 @@ struct db_writer : public boost::noncopyable {
   }
 
 private:
+  sem_t m_sem;
   std::string m_subdir;
   size_t m_block_counter;
   size_t m_bytes_this_block;
@@ -553,16 +584,16 @@ private:
   
   void flush_block() {
     static const std::string part_1("part"), part_2("part2"), part_3("part3");
-    m_blocks.push_back(boost::make_shared<thread_control_block>(m_subdir, part_1, m_block_counter, boost::ref(m_strings)));
+    m_blocks.push_back(boost::make_shared<thread_control_block>(&m_sem, m_subdir, part_1, m_block_counter, boost::ref(m_strings)));
     m_strings.clear();
 
     if (m_blocks.size() >= 16) {
-      m_blocks2.push_back(boost::make_shared<thread_control_block>(m_subdir, part_2, m_block_counter, boost::ref(m_strings), m_blocks));
+      m_blocks2.push_back(boost::make_shared<thread_control_block>(&m_sem, m_subdir, part_2, m_block_counter, boost::ref(m_strings), m_blocks));
       m_strings.clear();
       m_blocks.clear();
 
       if (m_blocks2.size() >= 16) {
-        m_blocks3.push_back(boost::make_shared<thread_control_block>(m_subdir, part_3, m_block_counter, boost::ref(m_strings), m_blocks2));
+        m_blocks3.push_back(boost::make_shared<thread_control_block>(&m_sem, m_subdir, part_3, m_block_counter, boost::ref(m_strings), m_blocks2));
         m_strings.clear();
         m_blocks2.clear();
       }
@@ -580,7 +611,7 @@ private:
       m_blocks.insert(m_blocks.end(), m_blocks3.begin(), m_blocks3.end());
       m_blocks3.clear();
     }
-    thread_control_block tcb(m_subdir, "final", 0, m_strings, m_blocks);
+    thread_control_block tcb(&m_sem, m_subdir, "final", 0, m_strings, m_blocks);
     m_strings.clear();
     tcb.m_thread->join();
     if (tcb.m_error) { boost::rethrow_exception(tcb.m_error); }
