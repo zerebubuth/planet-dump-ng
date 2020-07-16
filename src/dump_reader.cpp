@@ -489,7 +489,7 @@ struct thread_control_block : public boost::noncopyable {
     // and this TCB is deallocated - which might be significantly past this
     // point in time. (and std::vector<>::clear() doesn't / can't release
     // memory)
-    std::vector<kv_pair_t>().swap(m_strings.clear());
+    std::vector<kv_pair_t>().swap(m_strings);
   }
 };
 
