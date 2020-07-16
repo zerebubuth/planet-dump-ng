@@ -484,7 +484,12 @@ struct thread_control_block : public boost::noncopyable {
       writer(kv);
     }
 
-    m_strings.clear();
+    // actually want to make sure m_strings is deallocated here, because we're
+    // done using it and this thread owns that memory until the thread is joined
+    // and this TCB is deallocated - which might be significantly past this
+    // point in time. (and std::vector<>::clear() doesn't / can't release
+    // memory)
+    std::vector<kv_pair_t>().swap(m_strings.clear());
   }
 };
 
