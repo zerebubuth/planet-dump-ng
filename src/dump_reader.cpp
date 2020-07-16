@@ -621,7 +621,7 @@ dump_reader::dump_reader(const std::string &table_name,
                          const std::string &dump_file) 
   : m_impl() {
   std::ostringstream cmd;
-  cmd << "pg_restore -a -t " << table_name << " " << dump_file;
+  cmd << "pg_restore -f - -a -t " << table_name << " " << dump_file;
   m_impl.reset(new pimpl(cmd.str(), table_name));
 }
 
