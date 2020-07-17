@@ -553,6 +553,11 @@ struct db_writer : public boost::noncopyable {
         std::cerr << "Caught exception on " << tcb->file_name() << " but already in destructor." << std::endl;
       }
     }
+
+    int status = sem_destroy(&m_sem);
+    if (status != 0) {
+      std::cerr << "ERROR: Failed to destroy semaphore: error " << status << std::endl;
+    }
   }
   
   void finish() {
