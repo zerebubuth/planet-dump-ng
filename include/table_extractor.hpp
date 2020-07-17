@@ -23,8 +23,9 @@ struct table_extractor_with_timestamp {
   typedef R row_type;
 
   table_extractor_with_timestamp(const std::string &table_name,
-                                 const std::string &dump_file)
-    : m_reader(table_name, dump_file) {
+                                 const std::string &dump_file,
+                                 unsigned int max_concurrency)
+    : m_reader(table_name, dump_file, max_concurrency) {
   }
 
   boost::posix_time::ptime read() {

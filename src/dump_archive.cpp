@@ -28,7 +28,8 @@ typedef boost::error_info<tag_table_name, std::string> errinfo_table_name;
 template <typename R>
 bt::ptime extract_table_with_timestamp(const std::string &table_name, 
                                        const std::string &dump_file,
-                                       bool resume) {
+                                       bool resume,
+                                       unsigned int max_concurrency) {
   typedef R row_type;
   fs::path base_dir(table_name);
   boost::optional<bt::ptime> timestamp;
@@ -53,7 +54,7 @@ bt::ptime extract_table_with_timestamp(const std::string &table_name,
     return timestamp.get();
 
   } else {
-    table_extractor_with_timestamp<row_type> extractor(table_name, dump_file);
+    table_extractor_with_timestamp<row_type> extractor(table_name, dump_file, max_concurrency);
     timestamp = extractor.read();
     fs::ofstream out(base_dir / ".complete");
     out << bt::to_simple_string(timestamp.get()) << "\n";
@@ -66,9 +67,10 @@ void thread_extract_with_timestamp(bt::ptime &timestamp,
                                    boost::exception_ptr &error,
                                    std::string table_name,
                                    std::string dump_file,
-                                   bool resume) {
+                                   bool resume,
+                                   unsigned int max_concurrency) {
   try {
-    bt::ptime ts = extract_table_with_timestamp<R>(table_name, dump_file, resume);
+    bt::ptime ts = extract_table_with_timestamp<R>(table_name, dump_file, resume, max_concurrency);
     timestamp = ts;
 
   } catch (const boost::exception &e) {
@@ -90,11 +92,11 @@ void thread_extract_with_timestamp(bt::ptime &timestamp,
 base_thread::~base_thread() {}
 
 template <typename R>
-run_thread<R>::run_thread(std::string table_name_, std::string dump_file, bool resume)
+run_thread<R>::run_thread(std::string table_name_, std::string dump_file, bool resume, unsigned int max_concurrency)
   : timestamp(), error(), 
     thr(&thread_extract_with_timestamp<R>,
         boost::ref(timestamp), boost::ref(error),
-        table_name_, dump_file, resume), table_name(table_name_) {
+        table_name_, dump_file, resume, max_concurrency), table_name(table_name_) {
 }
 
 template <typename R>

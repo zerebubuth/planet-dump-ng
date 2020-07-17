@@ -52,6 +52,8 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
     ("resume", "If this argument is present, then planet-dump-ng will attempt "
      "to resume processing from partial data. If not present, then it will "
      "start from scratch.")
+    ("max-concurrency", po::value<unsigned int>()->default_value(16),
+      "Maximum number of disk writing threads to run for *each* table.")
     ;
 
   po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -87,10 +89,10 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
  * guaranteed in the PostgreSQL dump file. returns the maximum time seen
  * in a timestamp of any element in the dump file.
  */
-bt::ptime setup_databases(const std::string &dump_file, bool resume) {
+bt::ptime setup_databases(const std::string &dump_file, bool resume, unsigned int max_concurrency) {
   std::list<boost::shared_ptr<base_thread> > threads;
   
-#define THREAD_RUN(type,table) threads.push_back(boost::make_shared<run_thread<type> >(table, dump_file, resume))
+#define THREAD_RUN(type,table) threads.push_back(boost::make_shared<run_thread<type> >(table, dump_file, resume, max_concurrency))
 
   THREAD_RUN(changeset, "changesets");
   THREAD_RUN(node, "nodes");
@@ -130,8 +132,9 @@ int main(int argc, char *argv[]) {
     // extract data from the dump file for the "sorted" data tables, like nodes,
     // ways, relations, changesets and their associated tags, etc...
     const bool resume = options.count("resume") > 0;
+    unsigned int max_concurrency = options["max-concurrency"].as<unsigned int>();
     const std::string dump_file(options["dump-file"].as<std::string>());
-    const bt::ptime max_time = setup_databases(dump_file, resume);
+    const bt::ptime max_time = setup_databases(dump_file, resume, max_concurrency);
 
     // users aren't dumped directly to the files. we only use them to build up a map
     // of uid -> name where a missing uid indicates that the user doesn't have public

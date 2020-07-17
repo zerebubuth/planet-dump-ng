@@ -8,8 +8,9 @@
 
 struct dump_reader 
   : public boost::noncopyable {
-  dump_reader(const std::string &,
-              const std::string &);
+  dump_reader(const std::string &table_name,
+              const std::string &dump_file,
+              unsigned int max_concurrency);
 
   ~dump_reader();
 

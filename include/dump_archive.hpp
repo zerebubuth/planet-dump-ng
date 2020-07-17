@@ -20,7 +20,7 @@ struct run_thread : public base_thread {
   boost::thread thr;
   std::string table_name;
 
-  run_thread(std::string table_name_, std::string dump_file, bool resume);
+  run_thread(std::string table_name_, std::string dump_file, bool resume, unsigned int max_concurrency);
   ~run_thread();
   boost::posix_time::ptime join();
 };

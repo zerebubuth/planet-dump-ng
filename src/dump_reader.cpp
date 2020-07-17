@@ -517,14 +517,14 @@ struct thread_control_block : public boost::noncopyable {
 };
 
 struct db_writer : public boost::noncopyable {
-  explicit db_writer(const std::string &table_name) 
+  explicit db_writer(const std::string &table_name, unsigned int max_concurrency)
     : m_subdir(table_name),
       m_block_counter(0),
       m_bytes_this_block(0) {
     // TODO: configurable value? the memory usage should be *approximately*
     // 64MB (MAX_MERGESORT_BLOCK_SIZE) * the number of threads, controlled by
-    // the semaphore below. so 1G in this case (* the number of tables).
-    int status = sem_init(&m_sem, 0, 16);
+    // the semaphore below.
+    int status = sem_init(&m_sem, 0, max_concurrency);
     if (status != 0) {
       BOOST_THROW_EXCEPTION(std::runtime_error((boost::format("Failed to sem_init, return = %1%.") % status).str()));
     }
@@ -631,11 +631,11 @@ private:
 } // anonymous namespace
 
 struct dump_reader::pimpl {
-  pimpl(const std::string &cmd, const std::string &table_name)
+  pimpl(const std::string &cmd, const std::string &table_name, unsigned int max_concurrency)
     : m_proc(cmd),
       m_line_filter(m_proc, 1024 * 1024),
       m_cont_filter(m_line_filter, table_name),
-      m_writer(table_name) {
+      m_writer(table_name, max_concurrency) {
 
     // get the headers for the COPY data
     m_column_names = m_cont_filter.init();
@@ -654,11 +654,12 @@ struct dump_reader::pimpl {
 };
 
 dump_reader::dump_reader(const std::string &table_name,
-                         const std::string &dump_file) 
+                         const std::string &dump_file,
+                         unsigned int max_concurrency)
   : m_impl() {
   std::ostringstream cmd;
   cmd << "pg_restore -f - -a -t " << table_name << " " << dump_file;
-  m_impl.reset(new pimpl(cmd.str(), table_name));
+  m_impl.reset(new pimpl(cmd.str(), table_name, max_concurrency));
 }
 
 dump_reader::~dump_reader() {
