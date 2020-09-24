@@ -78,17 +78,13 @@ struct unapp_item {
   }
 
   int operator()(int, std::string &s) const {
-    uint32_t size = 0;
+    s.clear();
     unsigned char c = 0;
-    uint32_t exponent = 0;
-    do {
-      in.read((char *)&c, 1);
-      size = size | (uint32_t(c & 0x7f) << (7 * exponent));
-      ++exponent;
-    } while ((c & 0x80) == 0x80);
 
-    s.resize(size);
-    in.read(&s[0], size);
+    for (in.read((char *)&c, 1); c != '\0'; in.read((char *)&c, 1)) {
+      s.push_back(c);
+    }
+
     return 0;
   }
 

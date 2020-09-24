@@ -76,16 +76,17 @@ struct app_item {
       BOOST_THROW_EXCEPTION(std::runtime_error("String length too long."));
     }
 
-    unsigned char c = 0;
-    while (size > 0x7f) {
-      c = 0x80 | (size & 0x7f);
-      out.write((const char *)&c, 1);
-      size >>= 7;
+    // serialise as null-terminated UTF-8. this means the sorting order is
+    // (sort of) meaningful, but means we have to stop on the first null
+    // byte. these strings _shouldn't_ contain null bytes, but lots of things
+    // that shouldn't happen still do.
+    std::size_t len = s.find('\0');
+    if (len == std::string::npos) {
+      len = s.size();
     }
-    c = size & 0x7f;
-    out.write((const char *)&c, 1);
 
-    out.write(s.data(), s.size());
+    out.write(s.data(), len);
+    out.write("\0", 1);
     return 0;
   }
   
@@ -143,7 +144,8 @@ std::string to_binary(std::ostringstream &out, const T &t) {
   // not the contents written since clear() was called, we need to
   // chop off any remaining garbage at the end.
   std::string rv = out.str();
-  rv.resize(out.tellp());
+  std::streampos pos = out.tellp();
+  rv.resize(pos);
   return rv;
 }
 
