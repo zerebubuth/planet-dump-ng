@@ -101,3 +101,11 @@ looking at "pg_dump" to see how it would best be done
 efficiently. While looking at "pg_dump", it became clear that what was
 really needed was just the dump itself - a dump which is produced
 regularly for backup purposes anyway.
+
+Tag sorting
+-----------
+
+Starting with version 1.2.0, `planet-dump-ng` sorts tags by the UTF-8 encoded
+bytes of the keys. Most keys use only ASCII characters, so this corresponds to
+an alphabetic ordering for those keys. Other keys will depend on how the
+codepoint is expressed in UTF-8. Values do not contribute to ordering.
