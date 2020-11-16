@@ -79,11 +79,12 @@ does a join between the top level elements like nodes, ways and
 relations and their "inners" - things like tags, way nodes and relation
 members.
 
-In order that the system can output a planet file or a history planet
-file in the same run, all of this is generated from the history
-tables. This means a minor adjustment to how the "current" planet is
-written, with a filter which drops any non-current version of an
-element and any current version which is deleted.
+In order that the system can output a planet file or a history planet file in
+the same run, both are generated from the history tables. The history planet
+file contains all these versions, but the planet file without history data
+("current") does not. This requires a minor adjustment to how the non-history
+planet is written, with a filter which only keeps the most recent version of
+each element and does not output any elements which are flagged as deleted.
 
 History
 -------
