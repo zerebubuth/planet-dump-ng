@@ -414,19 +414,23 @@ xml_writer::xml_writer(const std::string &file_name, const boost::program_option
   , m_users(users)
   , m_changeset_discussions(cd)
   , m_user_info_level(uil)
-  , m_generator_name(options["generator"].as<std::string>()) {
+  , m_generator_name(options["generator"].as<std::string>())
+  , m_author_name(options["meta-author"].as<std::string>())
+  , m_source_name(options["meta-source"].as<std::string>())
+  , m_copyleft_name(options["meta-copyleft"].as<std::string>())
+  , m_attribution_name(options["meta-attribution"].as<std::string>()) {
 
   m_impl->begin("osm");
-  m_impl->attribute("license",     OSM_LICENSE_TEXT);
-  m_impl->attribute("copyright",   OSM_COPYRIGHT_TEXT);
+  m_impl->attribute("license",     m_copyleft_name);
+  m_impl->attribute("copyright",   m_author_name);
   m_impl->attribute("version",     OSM_VERSION_TEXT);
   m_impl->attribute("generator",   m_generator_name);
-  m_impl->attribute("attribution", OSM_ATTRIBUTION_TEXT);
+  m_impl->attribute("attribution", m_attribution_name);
   m_impl->attribute("timestamp",   m_impl->m_now);
 
   m_impl->begin("bound");
   m_impl->attribute("box", "-90,-180,90,180");
-  m_impl->attribute("origin", OSM_API_ORIGIN);
+  m_impl->attribute("origin", m_source_name);
   m_impl->end();
 }
 

@@ -6,6 +6,7 @@
 #include "history_filter.hpp"
 #include "changeset_filter.hpp"
 #include "config.h"
+#include "writer_common.hpp"
 
 #include <boost/shared_ptr.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -24,6 +25,8 @@ namespace po = boost::program_options;
  * get command line options, handle --help and usage, validate options.
  */
 static void get_options(int argc, char **argv, po::variables_map &vm) {
+  std::string meta_file;
+
   po::options_description desc(PACKAGE_STRING ": Allowed options");
 
   desc.add_options()
@@ -54,9 +57,22 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
      "start from scratch.")
     ("max-concurrency", po::value<unsigned int>()->default_value(16),
       "Maximum number of disk writing threads to run for *each* table.")
+    ("meta-file,M", po::value<std::string>(&meta_file), "data metainfo configuration file")
     ;
+    
+  po::options_description meta;
+  
+  meta.add_options()
+    ("meta-author", po::value<std::string>()->default_value(OSM_COPYRIGHT_TEXT), "author data metainfo")
+    ("meta-source", po::value<std::string>()->default_value(OSM_API_ORIGIN), "source data metainfo")
+    ("meta-copyleft", po::value<std::string>()->default_value(OSM_LICENSE_TEXT), "copyleft data metainfo")
+    ("meta-attribution", po::value<std::string>()->default_value(OSM_ATTRIBUTION_TEXT), "attribution data metainfo")
+    ;
+  
+  po::options_description optns;
+  optns.add(desc).add(meta);
 
-  po::store(po::parse_command_line(argc, argv, desc), vm);
+  po::store(po::parse_command_line(argc, argv, optns), vm);
   po::notify(vm);
 
   if (vm.count("help")) {
@@ -80,6 +96,20 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
       "--changeset-discussions (or the respective -no-userinfo options) to get output.\n\n";
     std::cerr << desc << std::endl;
     exit(1);
+  }
+  
+  if (vm.count("meta-file")) {
+    std::ifstream ifs(meta_file.c_str());
+    if (!ifs)
+    {
+      std::cout << "Can not open metainfo file: " << meta_file << "\n";
+      exit(1);
+    }
+    else
+    {
+      po::store(po::parse_config_file(ifs, optns), vm);
+      po::notify(vm);
+    }
   }
 }
 

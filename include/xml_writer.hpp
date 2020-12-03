@@ -35,6 +35,10 @@ private:
   changeset_discussions m_changeset_discussions;
   user_info_level m_user_info_level;
   std::string m_generator_name;
+  std::string m_author_name;
+  std::string m_source_name;
+  std::string m_copyleft_name;
+  std::string m_attribution_name;
   changeset_map_t m_changesets;
 };
 

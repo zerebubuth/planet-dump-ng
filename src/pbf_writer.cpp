@@ -116,7 +116,8 @@ struct pbf_writer::pimpl {
       m_dense_section(NULL), 
       m_changeset_user_map(),
       m_recheck_elements(int(element_RELATION) + 1),
-      m_generator_name(options["generator"].as<std::string>()) {
+      m_generator_name(options["generator"].as<std::string>()),
+      m_source_name(options["meta-source"].as<std::string>()) {
     // different re-check limits per type so that we can better
     // adapt to the different sizes of elements, and hit the
     // byte limit without overflowing it.
@@ -164,7 +165,7 @@ struct pbf_writer::pimpl {
     header.add_optional_features("Has_Metadata");
     header.add_optional_features("Sort.Type_then_ID");
     header.set_writingprogram(m_generator_name);
-    header.set_source(OSM_API_ORIGIN);
+    header.set_source(m_source_name);
 #ifndef WITH_OLD_OSMPBF
     header.set_osmosis_replication_timestamp((now - bt::from_time_t(time_t(0))).total_seconds());
 #endif
@@ -512,6 +513,7 @@ struct pbf_writer::pimpl {
   std::map<int64_t, int64_t> m_changeset_user_map;
   std::vector<size_t> m_recheck_elements;
   std::string m_generator_name;
+  std::string m_source_name;
 
   int64_t m_last_dense_id;
   int64_t m_last_dense_lat;

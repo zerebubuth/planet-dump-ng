@@ -1,8 +1,8 @@
 AC_INIT([planet-dump-ng],
-	[1.2.0],
-	[https://github.com/zerebubuth/openstreetmap-planet-dump-ng/issues],
-	[planet-dump-ng-1.2.0],
-	[https://github.com/zerebubuth/openstreetmap-planet-dump-ng])
+	[1.2.0.0.1],
+	[https://github.com/ZKoshak/planet-dump-ng/issues],
+	[planet-dump-ng-1.2.0.0.1],
+	[https://github.com/ZKoshak/planet-dump-ng])
 AM_INIT_AUTOMAKE([subdir-objects parallel-tests])
 AM_SILENT_RULES([yes])
 AC_CONFIG_HEADERS([include/config.h])
