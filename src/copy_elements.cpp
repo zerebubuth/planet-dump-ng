@@ -256,11 +256,21 @@ void writer_thread(int thread_index,
                    boost::shared_ptr<control_block<T> > blk) {
   const size_t block_size = block_size_trait<T>::value;
 
-  try {
-    do {
+  do {
+    try {
       blk->pre_swap_barrier.wait();
       blk->post_swap_barrier.wait();
+    } catch (...) {
+      exc = boost::current_exception();
+      std::cerr << "EXCEPTION: writer_thread(" << thread_index << "): "
+                << boost::diagnostic_information(exc) << std::endl;
+      // not sure we can recover from an error in synchronisation here, as we
+      // have no way of figuring out which state this thread or the other
+      // threads are in. so just explode.
+      abort();
+    }
 
+    try {
       // if write_elements previously threw an exception, then don't call it
       // again. but we need to continue going through the barrier loops, or all
       // the other threads will lock up waiting for this thread.
@@ -268,13 +278,14 @@ void writer_thread(int thread_index,
         write_elements<T>(*writer, *blk);
       }
 
-    } while (blk->elements.size() == block_size);
-
-  } catch (...) {
-    exc = boost::current_exception();
-    std::cerr << "EXCEPTION: writer_thread(" << thread_index << "): "
-              << boost::diagnostic_information(exc) << std::endl;
-  }
+    } catch (...) {
+      exc = boost::current_exception();
+      std::cerr << "EXCEPTION: writer_thread(" << thread_index << "): "
+                << boost::diagnostic_information(exc)
+                << ". Trying to continue..."
+                << std::endl;
+    }
+  } while (blk->elements.size() == block_size);
 
   try {
     boost::lock_guard<boost::mutex> lock(blk->thread_finished_mutex);
