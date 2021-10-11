@@ -252,7 +252,7 @@ template <> inline void write_elements<relation>(output_writer &writer, control_
 template <typename T>
 void writer_thread(int thread_index,
                    boost::exception_ptr exc,
-                   boost::shared_ptr<output_writer> writer, 
+                   boost::shared_ptr<output_writer> writer,
                    boost::shared_ptr<control_block<T> > blk) {
   const size_t block_size = block_size_trait<T>::value;
 
@@ -260,14 +260,19 @@ void writer_thread(int thread_index,
     do {
       blk->pre_swap_barrier.wait();
       blk->post_swap_barrier.wait();
-      
-      write_elements<T>(*writer, *blk);
-      
+
+      // if write_elements previously threw an exception, then don't call it
+      // again. but we need to continue going through the barrier loops, or all
+      // the other threads will lock up waiting for this thread.
+      if (exc == boost::exception_ptr()) {
+        write_elements<T>(*writer, *blk);
+      }
+
     } while (blk->elements.size() == block_size);
 
   } catch (...) {
     exc = boost::current_exception();
-    std::cerr << "EXCEPTION: writer_thread(" << thread_index << "): " 
+    std::cerr << "EXCEPTION: writer_thread(" << thread_index << "): "
               << boost::diagnostic_information(exc) << std::endl;
   }
 
@@ -280,7 +285,8 @@ void writer_thread(int thread_index,
     // this is a difficult case to handle - it's possible for locking
     // to fail, but unless we signal the condition variable then the
     // program would hang. instead, treat this as a fatal error.
-    std::cerr << "Thread " << thread_index << " failed to lock mutex!\n";
+    std::cerr << "Thread " << thread_index << " failed to lock mutex!"
+              << std::endl;
     abort();
   }
 }
@@ -320,8 +326,8 @@ void extract_users(std::map<int64_t, std::string> &display_name_map) {
 }
 
 template <typename T>
-void reader_thread(int thread_index, 
-                   boost::exception_ptr exc, 
+void reader_thread(int thread_index,
+                   boost::exception_ptr exc,
                    boost::shared_ptr<control_block<T> > blk) {
   try {
     thread_writer<T> writer(blk);
@@ -329,8 +335,12 @@ void reader_thread(int thread_index,
 
   } catch (...) {
     exc = boost::current_exception();
-    std::cerr << "EXCEPTION: reader_thread(" << thread_index << "): " 
+    std::cerr << "EXCEPTION: reader_thread(" << thread_index << "): "
               << boost::diagnostic_information(exc) << std::endl;
+    // if the reader thread failed, we can't make any progress, and it's
+    // unlikely that the writer threads can recover from this safely, so
+    // just explode.
+    abort();
   }
 
   try {
@@ -342,7 +352,8 @@ void reader_thread(int thread_index,
     // this is a difficult case to handle - it's possible for locking
     // to fail, but unless we signal the condition variable then the
     // program would hang. instead, treat this as a fatal error.
-    std::cerr << "Thread " << thread_index << " failed to lock mutex!\n";
+    std::cerr << "Thread " << thread_index << " failed to lock mutex!"
+              << std::endl;
     abort();
   }
 }
