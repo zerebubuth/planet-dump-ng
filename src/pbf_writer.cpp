@@ -178,7 +178,7 @@ struct pbf_writer::pimpl {
     using google::protobuf::io::GzipOutputStream;
 
     Blob blob;
-    size_t uncompressed_size = message.ByteSize();
+    size_t uncompressed_size = message.ByteSizeLong();
     // sanity check - if we're about to violate the OSMPBF format rules
     // then we'd rather stop than ship an invalid file.
     if (uncompressed_size >= OSMPBF::max_uncompressed_blob_size) {
@@ -203,9 +203,9 @@ struct pbf_writer::pimpl {
 
     BlobHeader blob_header;
     blob_header.set_type(type);
-    blob_header.set_datasize(blob.ByteSize());
+    blob_header.set_datasize(blob.ByteSizeLong());
 
-    int blob_header_size = blob_header.ByteSize();
+    int blob_header_size = blob_header.ByteSizeLong();
     if (blob_header_size < 0) {
       std::ostringstream ostr;
       ostr << "Unable to write blob header size " << blob_header_size 
@@ -227,7 +227,7 @@ struct pbf_writer::pimpl {
 
     if ((m_current_element != type) || 
         (num_elements >= m_recheck_elements[m_current_element])) {
-      m_est_pblock_size += pgroup->ByteSize();
+      m_est_pblock_size += pgroup->ByteSizeLong();
       size_t str_table_size = str_table.approx_size();
       if ((size_t(m_est_pblock_size) + str_table_size) > size_t(std::numeric_limits<int>::max())) {
         BOOST_THROW_EXCEPTION(std::runtime_error("Pblock + string table got too big."));
