@@ -126,8 +126,10 @@ int main(int argc, char *argv[]) {
     po::variables_map options;
     get_options(argc, argv, options);
 
+#if BOOST_VERSION < 107300
     // workaround for https://svn.boost.org/trac/boost/ticket/5638
     boost::gregorian::greg_month::get_month_map_ptr();
+#endif
 
     // extract data from the dump file for the "sorted" data tables, like nodes,
     // ways, relations, changesets and their associated tags, etc...
