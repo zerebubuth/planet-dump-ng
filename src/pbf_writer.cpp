@@ -104,7 +104,7 @@ struct pbf_writer::pimpl {
     : num_elements(0), buffer(), out(out_name.c_str()), str_table(),
       pblock(), pgroup(pblock.add_primitivegroup()), 
       current_node(NULL), current_way(NULL), current_relation(NULL),
-      m_byte_limit(int(0.25 * OSMPBF::max_uncompressed_blob_size)),
+      m_byte_limit(int(0.125 * OSMPBF::max_uncompressed_blob_size)),
       m_current_element(element_NULL),
       m_last_way_node_ref(0),
       m_last_relation_member_ref(0),
@@ -124,7 +124,7 @@ struct pbf_writer::pimpl {
     m_recheck_elements[element_CHANGESET] = 1;
     m_recheck_elements[element_NODE] = 16000;
     m_recheck_elements[element_WAY] = 8000;
-    m_recheck_elements[element_RELATION] = 500;
+    m_recheck_elements[element_RELATION] = 200;
 
     reset_dense_ids();
 
