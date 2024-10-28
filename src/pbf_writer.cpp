@@ -104,7 +104,7 @@ struct pbf_writer::pimpl {
     : num_elements(0), buffer(), out(out_name.c_str()), str_table(),
       pblock(), pgroup(pblock.add_primitivegroup()), 
       current_node(NULL), current_way(NULL), current_relation(NULL),
-      m_byte_limit(int(0.25 * OSMPBF::max_uncompressed_blob_size)),
+      m_byte_limit(int(0.125 * OSMPBF::max_uncompressed_blob_size)),
       m_current_element(element_NULL),
       m_last_way_node_ref(0),
       m_last_relation_member_ref(0),
@@ -125,9 +125,10 @@ struct pbf_writer::pimpl {
     m_recheck_elements[element_CHANGESET] = 1;
     m_recheck_elements[element_NODE] = 16000;
     m_recheck_elements[element_WAY] = 8000;
-    m_recheck_elements[element_RELATION] = 500;
+    m_recheck_elements[element_RELATION] = 200;
 
     reset_dense_ids();
+    m_est_pgroup_sz = 0;
 
     write_header_block(now);
   }
@@ -179,7 +180,7 @@ struct pbf_writer::pimpl {
     using google::protobuf::io::GzipOutputStream;
 
     Blob blob;
-    size_t uncompressed_size = message.ByteSize();
+    size_t uncompressed_size = message.ByteSizeLong();
     // sanity check - if we're about to violate the OSMPBF format rules
     // then we'd rather stop than ship an invalid file.
     if (uncompressed_size >= OSMPBF::max_uncompressed_blob_size) {
@@ -204,9 +205,9 @@ struct pbf_writer::pimpl {
 
     BlobHeader blob_header;
     blob_header.set_type(type);
-    blob_header.set_datasize(blob.ByteSize());
+    blob_header.set_datasize(blob.ByteSizeLong());
 
-    int blob_header_size = blob_header.ByteSize();
+    int blob_header_size = blob_header.ByteSizeLong();
     if (blob_header_size < 0) {
       std::ostringstream ostr;
       ostr << "Unable to write blob header size " << blob_header_size 
@@ -226,14 +227,15 @@ struct pbf_writer::pimpl {
       m_current_element = type;
     }
 
-    if ((m_current_element != type) || 
-        (num_elements >= m_recheck_elements[m_current_element])) {
-      m_est_pblock_size += pgroup->ByteSize();
-      size_t str_table_size = str_table.approx_size();
+    if ((m_current_element != type) ||
+        (num_elements >= m_recheck_elements[m_current_element]) ||
+        (m_current_element == element_RELATION && (m_est_pblock_size + m_est_pgroup_sz + str_table.approx_size()) > m_byte_limit)) {
+      m_est_pblock_size += pgroup->ByteSizeLong();
+      const size_t str_table_size = str_table.approx_size();
       if ((size_t(m_est_pblock_size) + str_table_size) > size_t(std::numeric_limits<int>::max())) {
         BOOST_THROW_EXCEPTION(std::runtime_error("Pblock + string table got too big."));
       }
-      bool new_block = ((m_current_element != type) || 
+      bool new_block = ((m_current_element != type) ||
                         ((m_est_pblock_size + int(str_table_size)) >= m_byte_limit));
 
       if (new_block) {
@@ -259,6 +261,7 @@ struct pbf_writer::pimpl {
       current_node = NULL;
       current_way = NULL;
       current_relation = NULL;
+      m_est_pgroup_sz = 0;
     }
   }
 
@@ -412,6 +415,14 @@ struct pbf_writer::pimpl {
     current_relation = pgroup->add_relations();
     current_relation->set_id(r.id);
     set_info(r, current_relation->mutable_info());
+    // relation tag + submessage len 1+2?
+    // id ~ 4+1 bytes? (+1 for tag)
+    // info len + tag = 1+1
+    // version ~ 1+1 byte
+    // changeset ID ~ 4+1 bytes?
+    // timestamp ~ 4+1 bytes?
+    // user ID 3+1 & string table user name 2 + 1 bytes?
+    m_est_pgroup_sz += 29;
 
     m_last_relation_member_ref = 0;
     ++num_elements;
@@ -451,6 +462,8 @@ struct pbf_writer::pimpl {
       if (current_relation == NULL) { BOOST_THROW_EXCEPTION(std::runtime_error("Tag before relation? oops.")); }
       current_relation->add_keys(str_table(t.key));
       current_relation->add_vals(str_table(t.value));
+      // keys & vals ~ 2 bytes each?
+      m_est_pgroup_sz += 4;
     }
   }
 
@@ -481,6 +494,10 @@ struct pbf_writer::pimpl {
     current_relation->add_memids(int64_t(rm.member_id) - m_last_relation_member_ref);
     current_relation->add_types(member_type(rm.member_type));
     m_last_relation_member_ref = rm.member_id;
+    // role = string in string table, so maybe 1 byte on average?
+    // member ID, diff to previous ~ 2 bytes?
+    // member type ~ 1 byte?
+    m_est_pgroup_sz += 4;
   }
   
   void finish() {
@@ -514,6 +531,13 @@ struct pbf_writer::pimpl {
   std::vector<size_t> m_recheck_elements;
   std::string m_generator_name;
   std::string m_source_name;
+
+  // (RELATIONS ONLY) keep track of the estimated pgroup size. normally the
+  // pgroup is flushed after a fixed number of elements, but sometimes if the
+  // elements are really big then this overflows the maximum pblock size. by
+  // tracking the estimated size, the pgroup can be flushed early, avoiding
+  // overflow.
+  int64_t m_est_pgroup_sz;
 
   int64_t m_last_dense_id;
   int64_t m_last_dense_lat;

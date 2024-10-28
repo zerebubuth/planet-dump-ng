@@ -34,13 +34,15 @@ fi
 
 # compare the outputs
 for name in *.bz2; do
-	 if [ -f "$name" ]; then
-		  bzcmp "$name" "$SRCDIR/$test_case/$name"
-		  if [ $? -ne 0 ]; then
-				echo "Output '$name' does not match '$SRCDIR/$test_case/$name'"
-				exit 1
-		  fi
-	 fi
+    if [ -f "$name" ]; then
+        bunzip2 -dc "$name" > actual
+        bunzip2 -dc "$SRCDIR/$test_case/$name" > expected
+        cmp actual expected
+        if [ $? -ne 0 ]; then
+            echo "Output '$name' does not match '$SRCDIR/$test_case/$name'"
+            exit 1
+        fi
+    fi
 done
 for name in *.pbf; do
 	 if [ -f "$name" ]; then
