@@ -110,3 +110,8 @@ Starting with version 1.2.0, `planet-dump-ng` sorts tags by the UTF-8 encoded
 bytes of the keys. Most keys use only ASCII characters, so this corresponds to
 an alphabetic ordering for those keys. Other keys will depend on how the
 codepoint is expressed in UTF-8. Values do not contribute to ordering.
+
+Environment variable
+-------------------
+
+Set the `PLANET_EPOCH_DATE` environment variable (format: YYYY-MM-DD) to override the default epoch date (Jan 1, 2004). This is useful when working with datasets that do not originate from OpenStreetMap, such as OpenHistoricalMap.

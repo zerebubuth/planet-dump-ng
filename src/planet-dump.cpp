@@ -58,7 +58,6 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
     ("max-concurrency", po::value<unsigned int>()->default_value(16),
       "Maximum number of disk writing threads to run for *each* table.")
     ("meta-file,M", po::value<std::string>(&meta_file), "data metainfo configuration file")
-    ("", po::value<std::string>()->implicit_value(""), "ENV: Set environment variable PLANET_EPOCH_DATE=YYYY-MM-DD to override the default epoch date (default: 2004-01-01)")
     ;
     
   po::options_description meta;
