@@ -283,6 +283,23 @@ BOOST_FUSION_ADAPT_STRUCT(
   (std::string, geom)
   )
 
+// one row of gpx_file_tags, sorted by (gpx_id, id) so the tags keep the
+// order they were saved in.
+struct gpx_file_tag {
+  static const int num_keys = 2;
+  static const std::vector<std::string> &column_names();
+
+  int64_t gpx_id, id;
+  std::string tag;
+};
+
+BOOST_FUSION_ADAPT_STRUCT(
+  gpx_file_tag,
+  (int64_t, gpx_id)
+  (int64_t, id)
+  (std::string, tag)
+  )
+
 enum class user_info_level {
   FULL,
   ANON

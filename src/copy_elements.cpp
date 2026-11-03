@@ -340,16 +340,21 @@ void extract_users(std::map<int64_t, std::string> &display_name_map) {
 void write_gpx(gpx_writer &writer, const std::set<std::string> &visibilities) {
   db_reader<gpx_file> file_reader("gpx_files");
   db_reader<gpx_track> track_reader("gpx_tracks");
+  db_reader<gpx_file_tag> tag_reader("gpx_file_tags");
 
   gpx_file file;
   gpx_track track;
+  gpx_file_tag tag;
   bool has_track = track_reader(track);
+  bool has_tag = tag_reader(tag);
   std::vector<gpx_track> tracks;
+  std::vector<std::string> tags;
 
-  // both tables are sorted by gpx_id, so walk them together.
+  // the three tables are sorted by gpx_id, so walk them together.
   while (file_reader(file)) {
     const bool wanted = file.visible && (visibilities.count(file.visibility) > 0);
     tracks.clear();
+    tags.clear();
 
     while (has_track && (track.gpx_id < file.id)) {
       has_track = track_reader(track);
@@ -361,8 +366,18 @@ void write_gpx(gpx_writer &writer, const std::set<std::string> &visibilities) {
       has_track = track_reader(track);
     }
 
+    while (has_tag && (tag.gpx_id < file.id)) {
+      has_tag = tag_reader(tag);
+    }
+    while (has_tag && (tag.gpx_id == file.id)) {
+      if (wanted) {
+        tags.push_back(tag.tag);
+      }
+      has_tag = tag_reader(tag);
+    }
+
     if (wanted && !tracks.empty()) {
-      writer.trace(file, tracks);
+      writer.trace(file, tracks, tags);
     }
   }
 }

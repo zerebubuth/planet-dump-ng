@@ -3,7 +3,7 @@
 -- tables a GPX dump needs:
 --
 --   pg_dump --format=custom --data-only \
---     --table=users --table=gpx_files --table=gpx_tracks \
+--     --table=users --table=gpx_files --table=gpx_tracks --table=gpx_file_tags \
 --     --file=gpx-traces.dmp osm
 
 -- display name that needs escaping in the trace URL
@@ -52,3 +52,12 @@ INSERT INTO gpx_tracks (gpx_id, trackid, segment, geom) VALUES
   (5, 0, 0, ST_SetSRID(ST_MakePoint(9.5, 47.1, 0, 0), 4326)),
   (6, 0, 0, ST_SetSRID(ST_MakePoint(9.54, 47.16, 0, '-infinity'), 4326)),
   (8, 0, 0, ST_SetSRID(ST_MakePoint(9.55, 47.17, 480, extract(epoch FROM timestamp '1969-12-31 23:59:59')), 4326));
+
+-- inserted out of order: the output follows id, not the insert order
+INSERT INTO gpx_file_tags (gpx_id, tag, id) VALUES
+  (1, 'bike', 2),
+  (1, 'vaduz', 1),
+  -- trackable: tags are not written
+  (2, 'secret', 3),
+  -- needs escaping
+  (8, 'a<b', 4);

@@ -19,7 +19,7 @@ namespace pt = boost::posix_time;
 
 namespace {
 
-const char *TRACE_URL_BASE = "https://www.openstreetmap.org/user/";
+const char *OSM_NAMESPACE = "https://www.openstreetmap.org/gpx/0.1";
 
 struct shell_escape_char {
   template <typename ResultT>
@@ -56,24 +56,6 @@ std::string replace_xml_bad_chars(const std::string &s) {
     }
   }
   return output;
-}
-
-// percent-encode a display name for use in a URL path.
-std::string url_escape(const std::string &s) {
-  static const char *hex = "0123456789ABCDEF";
-  std::string out;
-  for (size_t i = 0; i < s.size(); ++i) {
-    unsigned char c = s[i];
-    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
-        c == '-' || c == '.' || c == '_' || c == '~') {
-      out += char(c);
-    } else {
-      out += '%';
-      out += hex[c >> 4];
-      out += hex[c & 0x0f];
-    }
-  }
-  return out;
 }
 
 std::string fmt_iso_time(const pt::ptime &t) {
@@ -290,8 +272,8 @@ void gpx_writer::pimpl::finish() {
 }
 
 gpx_writer::gpx_writer(const std::string &file_name, const boost::program_options::variables_map &options,
-                       const user_map_t &users, const pt::ptime &max_time)
-  : m_impl(new pimpl(file_name, options)), m_users(users) {
+                       const pt::ptime &max_time)
+  : m_impl(new pimpl(file_name, options)) {
 
   const std::string generator = options["generator"].as<std::string>();
 
@@ -299,6 +281,7 @@ gpx_writer::gpx_writer(const std::string &file_name, const boost::program_option
   m_impl->attribute("version", "1.0");
   m_impl->attribute("creator", generator.c_str());
   m_impl->attribute("xmlns", "http://www.topografix.com/GPX/1/0");
+  m_impl->attribute("xmlns:osm", OSM_NAMESPACE);
 
   m_impl->element("author", options["meta-author"].as<std::string>());
   m_impl->element("url", options["meta-copyleft"].as<std::string>());
@@ -310,7 +293,8 @@ gpx_writer::gpx_writer(const std::string &file_name, const boost::program_option
 gpx_writer::~gpx_writer() {
 }
 
-void gpx_writer::trace(const gpx_file &file, const std::vector<gpx_track> &tracks) {
+void gpx_writer::trace(const gpx_file &file, const std::vector<gpx_track> &tracks,
+                       const std::vector<std::string> &tags) {
   // decode first, so a broken geometry skips the whole trace and does not
   // leave a half written <trk>.
   std::vector<std::vector<point> > trksegs;
@@ -332,15 +316,17 @@ void gpx_writer::trace(const gpx_file &file, const std::vector<gpx_track> &track
 
   m_impl->begin("trk");
 
-  // like the trackpoints API, only identifiable traces show who uploaded
-  // them. other traces are written without name, description or URL.
-  if (file.visibility == "identifiable") {
+  // like the trackpoints API, only identifiable traces have a name and a
+  // description. trackable traces are anonymous.
+  const bool identifiable = (file.visibility == "identifiable");
+  if (identifiable) {
     m_impl->element("name", file.name);
     m_impl->element("desc", file.description);
-
-    user_map_t::const_iterator user = m_users.find(file.user_id);
-    if (user != m_users.end()) {
-      m_impl->element("url", (boost::format("%1%%2%/traces/%3%") % TRACE_URL_BASE % url_escape(user->second) % file.id).str());
+  }
+  m_impl->element("osm:id", (boost::format("%1%") % file.id).str());
+  if (identifiable) {
+    for (size_t i = 0; i < tags.size(); ++i) {
+      m_impl->element("osm:tag", tags[i]);
     }
   }
 

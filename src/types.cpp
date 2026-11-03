@@ -14,6 +14,7 @@ const char *relation_member_column_names_[] = { "relation_id", "version", "seque
 const char *changeset_comment_column_names_[] = { "changeset_id", "created_at", "author_id", "body", "visible" };
 const char *gpx_file_column_names_[] = { "id", "user_id", "visible", "name", "description", "timestamp", "visibility" };
 const char *gpx_track_column_names_[] = { "gpx_id", "trackid", "segment", "geom" };
+const char *gpx_file_tag_column_names_[] = { "gpx_id", "id", "tag" };
 
 const std::vector<std::string> user_column_names = std::vector<std::string>(user_column_names_, user_column_names_ + sizeof(user_column_names_) / sizeof(*user_column_names_));
 const std::vector<std::string> changeset_column_names = std::vector<std::string>(changeset_column_names_, changeset_column_names_ + sizeof(changeset_column_names_) / sizeof(*changeset_column_names_));
@@ -27,6 +28,7 @@ const std::vector<std::string> relation_member_column_names = std::vector<std::s
 const std::vector<std::string> changeset_comment_column_names = std::vector<std::string>(changeset_comment_column_names_, changeset_comment_column_names_ + sizeof(changeset_comment_column_names_) / sizeof(*changeset_comment_column_names_));
 const std::vector<std::string> gpx_file_column_names = std::vector<std::string>(gpx_file_column_names_, gpx_file_column_names_ + sizeof(gpx_file_column_names_) / sizeof(*gpx_file_column_names_));
 const std::vector<std::string> gpx_track_column_names = std::vector<std::string>(gpx_track_column_names_, gpx_track_column_names_ + sizeof(gpx_track_column_names_) / sizeof(*gpx_track_column_names_));
+const std::vector<std::string> gpx_file_tag_column_names = std::vector<std::string>(gpx_file_tag_column_names_, gpx_file_tag_column_names_ + sizeof(gpx_file_tag_column_names_) / sizeof(*gpx_file_tag_column_names_));
 
 } // anonymous namespace
 
@@ -42,6 +44,7 @@ const std::vector<std::string> &relation_member::column_names()   { return relat
 const std::vector<std::string> &changeset_comment::column_names() { return changeset_comment_column_names; }
 const std::vector<std::string> &gpx_file::column_names()          { return gpx_file_column_names; }
 const std::vector<std::string> &gpx_track::column_names()         { return gpx_track_column_names; }
+const std::vector<std::string> &gpx_file_tag::column_names()      { return gpx_file_tag_column_names; }
 
 const std::string changeset::table_name() { return "changesets"; }
 const std::string changeset::tag_table_name() { return "changeset_tags"; }

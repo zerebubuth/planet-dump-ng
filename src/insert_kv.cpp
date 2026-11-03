@@ -171,3 +171,4 @@ template void insert_kv<relation_member>(relation_member &, const slice_t &, con
 template void insert_kv<changeset_comment>(changeset_comment &, const slice_t &, const slice_t &);
 template void insert_kv<gpx_file>(gpx_file &, const slice_t &, const slice_t &);
 template void insert_kv<gpx_track>(gpx_track &, const slice_t &, const slice_t &);
+template void insert_kv<gpx_file_tag>(gpx_file_tag &, const slice_t &, const slice_t &);

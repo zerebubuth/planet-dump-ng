@@ -178,3 +178,4 @@ template struct extract_kv<relation_member>;
 template struct extract_kv<changeset_comment>;
 template struct extract_kv<gpx_file>;
 template struct extract_kv<gpx_track>;
+template struct extract_kv<gpx_file_tag>;

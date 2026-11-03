@@ -166,6 +166,7 @@ bt::ptime setup_databases(const std::string &dump_file, bool resume, unsigned in
   if (with_gpx) {
     THREAD_RUN(gpx_file, "gpx_files");
     THREAD_RUN(gpx_track, "gpx_tracks");
+    THREAD_RUN(gpx_file_tag, "gpx_file_tags");
   }
 
 #undef THREAD_RUN
@@ -294,7 +295,7 @@ int main(int argc, char *argv[]) {
 
     if (with_gpx) {
       std::cerr << "Writing GPS traces..." << std::endl;
-      gpx_writer writer(options["gpx"].as<std::string>(), options, display_name_map, max_time);
+      gpx_writer writer(options["gpx"].as<std::string>(), options, max_time);
       const std::vector<std::string> &v = options["gpx-visibility"].as<std::vector<std::string> >();
       write_gpx(writer, std::set<std::string>(v.begin(), v.end()));
       writer.finish();
