@@ -347,8 +347,8 @@ void gpx_writer::trace(const gpx_file &file, const std::vector<gpx_track> &track
 
   m_impl->begin("trk");
 
-  // like the trackpoints API, only identifiable traces have a name, a
-  // description and tags. trackable traces are anonymous.
+  // only identifiable traces have a name, a description and tags.
+  // trackable traces only have the id and the points.
   const bool identifiable = (file.visibility == "identifiable");
   if (identifiable) {
     m_impl->element("name", file.name);

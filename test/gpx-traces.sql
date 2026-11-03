@@ -3,11 +3,8 @@
 -- tables a GPX dump needs:
 --
 --   pg_dump --format=custom --data-only \
---     --table=users --table=gpx_files --table=gpx_tracks --table=gpx_file_tags \
+--     --table=gpx_files --table=gpx_tracks --table=gpx_file_tags \
 --     --file=gpx-traces.dmp osm
-
--- display name that needs escaping in the trace URL
-UPDATE users SET display_name = 'mike hd/ü' WHERE id = 6326;
 
 CREATE EXTENSION IF NOT EXISTS postgis;
 
@@ -24,17 +21,18 @@ CREATE TABLE gpx_tracks (
 INSERT INTO gpx_files (id, user_id, visible, name, description, "timestamp", inserted, visibility) VALUES
   -- written: two tracks, the first one split in two segments
   (1, 1, true, 'Morning ride', 'Vaduz <loop> & back', '2013-08-01 12:00:00', true, 'identifiable'),
-  -- skipped: not identifiable
+  -- skipped by default, written with --gpx-visibility trackable
   (2, 2680, true, 'trackable', '', '2013-08-01 12:00:00', true, 'trackable'),
+  -- skipped: public and private traces are never dumped
   (3, 2680, true, 'public', '', '2013-08-01 12:00:00', true, 'public'),
   (4, 2680, true, 'private', '', '2013-08-01 12:00:00', true, 'private'),
   -- skipped: deleted
   (5, 2680, false, 'deleted', '', '2013-08-01 12:00:00', true, 'identifiable'),
-  -- written without URL: the user has no public data
+  -- written: the control character in the name becomes '?'
   (6, -1, true, E'bad\001name', 'no url', '2013-08-01 12:00:00', true, 'identifiable'),
   -- skipped: no tracks
   (7, 6326, true, 'no tracks', '', '2013-08-01 12:00:00', false, 'identifiable'),
-  -- written: escaped display name in the URL
+  -- written: one track with a single point
   (8, 6326, true, 'Single point', '', '2013-08-01 12:00:00', true, 'identifiable');
 
 -- inserted out of order, planet-dump-ng has to sort them
