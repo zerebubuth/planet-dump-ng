@@ -6,14 +6,13 @@
 #include <libxml/xmlwriter.h>
 
 #include <cmath>
-#include <cstdio>
 #include <cstring>
-#include <ctime>
 #include <iostream>
 #include <stdexcept>
+#include <boost/foreach.hpp>
 #include <boost/format.hpp>
-#include <boost/algorithm/string.hpp>
 #include <boost/exception/all.hpp>
+#include <boost/date_time/posix_time/conversion.hpp>
 
 namespace pt = boost::posix_time;
 
@@ -21,73 +20,22 @@ namespace {
 
 const char *OSM_NAMESPACE = "https://www.openstreetmap.org/gpx/0.1";
 
-struct shell_escape_char {
-  template <typename ResultT>
-  std::string operator()(const ResultT &result) const {
-    std::string s;
-    for (typename ResultT::const_iterator itr = result.begin();
-         itr != result.end(); ++itr) {
-      s += '\\';
-      s += *itr;
-    }
-    return s;
-  }
-};
-
-std::string popen_command(const std::string &file_name, const boost::program_options::variables_map &options) {
-  std::string compress_command = options["compress-command"].as<std::string>();
-
-  std::string escaped_file_name(file_name);
-  boost::find_format_all(escaped_file_name, boost::token_finder(boost::is_any_of("\\\"")), shell_escape_char());
-
-  std::ostringstream command;
-  command << compress_command << " > \"" << escaped_file_name << "\"";
-  return command.str();
-}
-
-// same as in xml_writer: remove ASCII control characters, which are valid
-// UTF-8 but not valid XML.
-std::string replace_xml_bad_chars(const std::string &s) {
-  std::string output(s);
-  for (size_t i = 0; i < output.size(); ++i) {
-    char c = output[i];
-    if ((c >= 0x00) && (c < 0x20) && (c != 0x09) && (c != 0x0a) && (c != 0x0d)) {
-      output[i] = '?';
-    }
-  }
-  return output;
-}
-
-std::string fmt_iso_time(const pt::ptime &t) {
-  std::string s = pt::to_iso_extended_string(t);
-  // drop fractional seconds, if any
-  size_t dot = s.find('.');
-  if (dot != std::string::npos) {
-    s.resize(dot);
-  }
-  return s + "Z";
-}
-
-// M holds the time as seconds since the epoch.
-std::string fmt_epoch(double seconds) {
-  time_t t = time_t(std::floor(seconds));
-  struct tm tm;
-  if (gmtime_r(&t, &tm) == NULL) {
-    return std::string();
-  }
-  char buf[32];
-  size_t len = strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm);
-  return std::string(buf, len);
-}
-
 struct point {
   double lon, lat, ele, time;
 };
 
+/**
+ * the M value of a point holds its time as seconds since the epoch. the
+ * fractional seconds are dropped, as in the trackpoints API.
+ */
+pt::ptime epoch_to_time(double seconds) {
+  return pt::from_time_t(time_t(std::floor(seconds)));
+}
+
 int hex_value(char c) {
-  if (c >= '0' && c <= '9') { return c - '0'; }
-  if (c >= 'a' && c <= 'f') { return 10 + c - 'a'; }
-  if (c >= 'A' && c <= 'F') { return 10 + c - 'A'; }
+  if ((c >= '0') && (c <= '9')) { return c - '0'; }
+  if ((c >= 'a') && (c <= 'f')) { return 10 + c - 'a'; }
+  if ((c >= 'A') && (c <= 'F')) { return 10 + c - 'A'; }
   BOOST_THROW_EXCEPTION(std::runtime_error("Invalid hex digit in geometry."));
 }
 
@@ -181,11 +129,20 @@ private:
 
 struct gpx_writer::pimpl {
   pimpl(const std::string &file_name, const boost::program_options::variables_map &options);
+  ~pimpl();
 
   void begin(const char *name);
+  void attribute(const char *name, double d);
+  void attribute(const char *name, const char *s);
+  void attribute(const char *name, const std::string &s);
   void end();
-  void attribute(const char *name, const char *value);
-  void element(const char *name, const std::string &value);
+
+  void element(const char *name, int64_t i);
+  void element(const char *name, double d);
+  void element(const char *name, const pt::ptime &t);
+  void element(const char *name, const std::string &s);
+
+  // flush & close output stream
   void finish();
 
   std::string m_command;
@@ -193,40 +150,62 @@ struct gpx_writer::pimpl {
   xmlTextWriterPtr m_writer;
 };
 
-static int gpx_wrap_write(void *context, const char *buffer, int len) {
+static int wrap_write(void *context, const char *buffer, int len) {
   gpx_writer::pimpl *impl = static_cast<gpx_writer::pimpl *>(context);
-  if (impl == NULL || impl->m_out == NULL || len < 0) {
-    BOOST_THROW_EXCEPTION(std::runtime_error("Bad state in gpx_wrap_write."));
+
+  if (impl == NULL) {
+    BOOST_THROW_EXCEPTION(std::runtime_error("State object NULL in wrap_write."));
+  }
+  if (impl->m_out == NULL) {
+    BOOST_THROW_EXCEPTION(std::runtime_error("Output pipe NULL in wrap_write."));
+  }
+
+  if (len < 0) {
+    BOOST_THROW_EXCEPTION(std::runtime_error("Negative length in wrap_write."));
   }
   const size_t slen = len;
-  if (fwrite(buffer, 1, slen, impl->m_out) < slen) {
+
+  const size_t status = fwrite(buffer, 1, slen, impl->m_out);
+  if (status < slen) {
     BOOST_THROW_EXCEPTION(std::runtime_error("Failed to write to output stream."));
   }
   return len;
 }
 
-static int gpx_wrap_close(void *context) {
+static int wrap_close(void *context) {
   gpx_writer::pimpl *impl = static_cast<gpx_writer::pimpl *>(context);
-  if (impl == NULL || impl->m_out == NULL) {
-    BOOST_THROW_EXCEPTION(std::runtime_error("Bad state in gpx_wrap_close."));
+
+  if (impl == NULL) {
+    BOOST_THROW_EXCEPTION(std::runtime_error("State object NULL in wrap_close."));
   }
-  if (pclose(impl->m_out) == -1) {
-    BOOST_THROW_EXCEPTION(std::runtime_error("Output pipe could not be closed in gpx_wrap_close."));
+  if (impl->m_out == NULL) {
+    BOOST_THROW_EXCEPTION(std::runtime_error("Output pipe NULL in wrap_close."));
+  }
+
+  int status = pclose(impl->m_out);
+  if (status == -1) {
+    BOOST_THROW_EXCEPTION(std::runtime_error("Output pipe could not be closed in wrap_close."));
   }
   impl->m_out = NULL;
+
   return 0;
 }
 
 gpx_writer::pimpl::pimpl(const std::string &file_name, const boost::program_options::variables_map &options)
-  : m_command(popen_command(file_name, options)), m_out(popen(m_command.c_str(), "w")), m_writer(NULL) {
+  : m_command(popen_command(file_name, options)), m_out(popen(m_command.c_str(), "w")),
+    m_writer(NULL) {
 
   if (m_out == NULL) {
     BOOST_THROW_EXCEPTION(std::runtime_error("Unable to popen compression command for output."));
   }
 
-  xmlOutputBufferPtr output_buffer = xmlOutputBufferCreateIO(gpx_wrap_write, gpx_wrap_close, this, NULL);
+  xmlOutputBufferPtr output_buffer =
+    xmlOutputBufferCreateIO(wrap_write, wrap_close, this, NULL);
+
   m_writer = xmlNewTextWriter(output_buffer);
   if (m_writer == NULL) {
+    free(output_buffer);
+
     BOOST_THROW_EXCEPTION(std::runtime_error("Unable to create xmlTextWriter."));
   }
 
@@ -236,10 +215,49 @@ gpx_writer::pimpl::pimpl(const std::string &file_name, const boost::program_opti
   }
 }
 
+gpx_writer::pimpl::~pimpl() {
+}
+
+void gpx_writer::pimpl::finish() {
+  try {
+    xmlTextWriterEndDocument(m_writer);
+  } catch (...) {
+  }
+  xmlFreeTextWriter(m_writer);
+
+  if (m_out != NULL) {
+    // note that this *should* have already happened in xmlFreeTextWriter
+    // but this is just to be on the safe side and not leave any processes
+    // lying around.
+    pclose(m_out);
+  }
+}
+
 void gpx_writer::pimpl::begin(const char *name) {
   if (xmlTextWriterStartElement(m_writer, BAD_CAST name) < 0) {
     BOOST_THROW_EXCEPTION(std::runtime_error("Unable to begin element XML."));
   }
+}
+
+void gpx_writer::pimpl::attribute(const char *name, double d) {
+  if (xmlTextWriterWriteFormatAttribute(m_writer,
+                                        BAD_CAST name,
+                                        "%.7f", d) < 0) {
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write double attribute."));
+  }
+}
+
+void gpx_writer::pimpl::attribute(const char *name, const char *s) {
+  std::string fixed = replace_xml_bad_chars(s);
+  if (xmlTextWriterWriteAttribute(m_writer,
+                                  BAD_CAST name,
+                                  BAD_CAST fixed.c_str()) < 0) {
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write string attribute."));
+  }
+}
+
+void gpx_writer::pimpl::attribute(const char *name, const std::string &s) {
+  attribute(name, s.c_str());
 }
 
 void gpx_writer::pimpl::end() {
@@ -248,45 +266,58 @@ void gpx_writer::pimpl::end() {
   }
 }
 
-void gpx_writer::pimpl::attribute(const char *name, const char *value) {
-  if (xmlTextWriterWriteAttribute(m_writer, BAD_CAST name, BAD_CAST value) < 0) {
-    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write attribute."));
+void gpx_writer::pimpl::element(const char *name, int64_t i) {
+  if (xmlTextWriterWriteFormatElement(m_writer,
+                                      BAD_CAST name,
+                                      "%ld", i) < 0) {
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write int64 element."));
   }
 }
 
-void gpx_writer::pimpl::element(const char *name, const std::string &value) {
-  std::string fixed = replace_xml_bad_chars(value);
-  if (xmlTextWriterWriteElement(m_writer, BAD_CAST name, BAD_CAST fixed.c_str()) < 0) {
-    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write element."));
+// only used for the altitude, which is written with two decimals.
+void gpx_writer::pimpl::element(const char *name, double d) {
+  if (xmlTextWriterWriteFormatElement(m_writer,
+                                      BAD_CAST name,
+                                      "%.2f", d) < 0) {
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write double element."));
   }
 }
 
-void gpx_writer::pimpl::finish() {
-  xmlTextWriterEndDocument(m_writer);
-  xmlFreeTextWriter(m_writer);
-  m_writer = NULL;
-  if (m_out != NULL) {
-    pclose(m_out);
-    m_out = NULL;
+void gpx_writer::pimpl::element(const char *name, const pt::ptime &t) {
+  std::string ts = fmt_iso_time(t);
+  if (xmlTextWriterWriteElement(m_writer,
+                                BAD_CAST name,
+                                BAD_CAST ts.c_str()) < 0) {
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write timestamp element."));
+  }
+}
+
+void gpx_writer::pimpl::element(const char *name, const std::string &s) {
+  std::string fixed = replace_xml_bad_chars(s);
+  if (xmlTextWriterWriteElement(m_writer,
+                                BAD_CAST name,
+                                BAD_CAST fixed.c_str()) < 0) {
+    BOOST_THROW_EXCEPTION(std::runtime_error("Unable to write string element."));
   }
 }
 
 gpx_writer::gpx_writer(const std::string &file_name, const boost::program_options::variables_map &options,
                        const pt::ptime &max_time)
-  : m_impl(new pimpl(file_name, options)) {
-
-  const std::string generator = options["generator"].as<std::string>();
+  : m_impl(new pimpl(file_name, options))
+  , m_generator_name(options["generator"].as<std::string>())
+  , m_author_name(options["meta-author"].as<std::string>())
+  , m_copyleft_name(options["meta-copyleft"].as<std::string>()) {
 
   m_impl->begin("gpx");
-  m_impl->attribute("version", "1.0");
-  m_impl->attribute("creator", generator.c_str());
-  m_impl->attribute("xmlns", "http://www.topografix.com/GPX/1/0");
+  m_impl->attribute("version",   "1.0");
+  m_impl->attribute("creator",   m_generator_name);
+  m_impl->attribute("xmlns",     "http://www.topografix.com/GPX/1/0");
   m_impl->attribute("xmlns:osm", OSM_NAMESPACE);
 
-  m_impl->element("author", options["meta-author"].as<std::string>());
-  m_impl->element("url", options["meta-copyleft"].as<std::string>());
+  m_impl->element("author", m_author_name);
+  m_impl->element("url", m_copyleft_name);
   if (!max_time.is_special()) {
-    m_impl->element("time", fmt_iso_time(max_time));
+    m_impl->element("time", max_time);
   }
 }
 
@@ -294,20 +325,20 @@ gpx_writer::~gpx_writer() {
 }
 
 void gpx_writer::trace(const gpx_file &file, const std::vector<gpx_track> &tracks,
-                       const std::vector<std::string> &tags) {
+                       const std::vector<gpx_file_tag> &tags) {
   // decode first, so a broken geometry skips the whole trace and does not
   // leave a half written <trk>.
   std::vector<std::vector<point> > trksegs;
   try {
     int32_t trackid = -1;
-    for (size_t i = 0; i < tracks.size(); ++i) {
+    BOOST_FOREACH(const gpx_track &track, tracks) {
       // segments split one track by size or distance, and do not share
       // points, so all the segments of a trackid go in one <trkseg>.
-      if (trksegs.empty() || tracks[i].trackid != trackid) {
+      if (trksegs.empty() || (track.trackid != trackid)) {
         trksegs.push_back(std::vector<point>());
-        trackid = tracks[i].trackid;
+        trackid = track.trackid;
       }
-      ewkb_reader(tracks[i].geom).read(trksegs.back());
+      ewkb_reader(track.geom).read(trksegs.back());
     }
   } catch (const std::exception &e) {
     std::cerr << "WARNING: skipping trace " << file.id << ": " << e.what() << std::endl;
@@ -316,41 +347,36 @@ void gpx_writer::trace(const gpx_file &file, const std::vector<gpx_track> &track
 
   m_impl->begin("trk");
 
-  // like the trackpoints API, only identifiable traces have a name and a
-  // description. trackable traces are anonymous.
+  // like the trackpoints API, only identifiable traces have a name, a
+  // description and tags. trackable traces are anonymous.
   const bool identifiable = (file.visibility == "identifiable");
   if (identifiable) {
     m_impl->element("name", file.name);
     m_impl->element("desc", file.description);
   }
-  m_impl->element("osm:id", (boost::format("%1%") % file.id).str());
+  m_impl->element("osm:id", file.id);
   if (identifiable) {
-    for (size_t i = 0; i < tags.size(); ++i) {
-      m_impl->element("osm:tag", tags[i]);
+    BOOST_FOREACH(const gpx_file_tag &tag, tags) {
+      m_impl->element("osm:tag", tag.tag);
     }
   }
 
-  char buf[32];
-  for (size_t i = 0; i < trksegs.size(); ++i) {
-    if (trksegs[i].empty()) {
+  BOOST_FOREACH(const std::vector<point> &trkseg, trksegs) {
+    if (trkseg.empty()) {
       continue;
     }
     m_impl->begin("trkseg");
-    for (size_t j = 0; j < trksegs[i].size(); ++j) {
-      const point &p = trksegs[i][j];
+    BOOST_FOREACH(const point &p, trkseg) {
       m_impl->begin("trkpt");
-      snprintf(buf, sizeof(buf), "%.7f", p.lat);
-      m_impl->attribute("lat", buf);
-      snprintf(buf, sizeof(buf), "%.7f", p.lon);
-      m_impl->attribute("lon", buf);
+      m_impl->attribute("lat", p.lat);
+      m_impl->attribute("lon", p.lon);
       // gpx_tracks saves a missing altitude as 0, so 0 is left out.
       if (p.ele != 0.0) {
-        snprintf(buf, sizeof(buf), "%.2f", p.ele);
-        m_impl->element("ele", buf);
+        m_impl->element("ele", p.ele);
       }
       // -Infinity is a point without a timestamp.
       if (std::isfinite(p.time)) {
-        m_impl->element("time", fmt_epoch(p.time));
+        m_impl->element("time", epoch_to_time(p.time));
       }
       m_impl->end();
     }

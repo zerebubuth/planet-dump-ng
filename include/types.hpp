@@ -26,7 +26,6 @@ enum nwr_enum {
   nwr_relation
 };
 
-
 struct user {
   static const int num_keys = 1;
   static const std::vector<std::string> &column_names();
@@ -248,8 +247,10 @@ struct gpx_file {
   bool visible;
   std::string name, description;
   boost::posix_time::ptime timestamp;
-  // kept as text, so new or removed values in the database enum do not
-  // break the dump.
+  /**
+   * kept as text, so new or removed values in the database enum do not
+   * break the dump.
+   */
   std::string visibility;
 };
 
@@ -264,8 +265,10 @@ BOOST_FUSION_ADAPT_STRUCT(
   (std::string, visibility)
   )
 
-// one row of gpx_tracks. geom is the hex EWKB text that PostGIS writes in
-// COPY output, a LineString or Point with Z (altitude) and M (epoch time).
+/**
+ * one row of gpx_tracks. geom is the hex EWKB text that PostGIS writes in
+ * COPY output, a LineString or Point with Z (altitude) and M (epoch time).
+ */
 struct gpx_track {
   static const int num_keys = 3;
   static const std::vector<std::string> &column_names();
@@ -283,8 +286,10 @@ BOOST_FUSION_ADAPT_STRUCT(
   (std::string, geom)
   )
 
-// one row of gpx_file_tags, sorted by (gpx_id, id) so the tags keep the
-// order they were saved in.
+/**
+ * one row of gpx_file_tags, sorted by (gpx_id, id) so the tags keep the
+ * order they were saved in.
+ */
 struct gpx_file_tag {
   static const int num_keys = 2;
   static const std::vector<std::string> &column_names();

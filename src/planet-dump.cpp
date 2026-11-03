@@ -24,6 +24,18 @@ namespace bt = boost::posix_time;
 namespace po = boost::program_options;
 
 /**
+ * true when one of the OSM outputs (XML, PBF, changesets, ...) is asked for.
+ */
+static bool has_osm_output(const po::variables_map &vm) {
+  return (vm.count("xml") + vm.count("history-xml") +
+          vm.count("pbf") + vm.count("history-pbf") +
+          vm.count("changesets") + vm.count("changeset-discussions") +
+          vm.count("xml-no-userinfo") + vm.count("history-xml-no-userinfo") +
+          vm.count("pbf-no-userinfo") + vm.count("history-pbf-no-userinfo") +
+          vm.count("changesets-no-userinfo") + vm.count("changeset-discussions-no-userinfo")) > 0;
+}
+
+/**
  * get command line options, handle --help and usage, validate options.
  */
 static void get_options(int argc, char **argv, po::variables_map &vm) {
@@ -90,13 +102,7 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
     BOOST_THROW_EXCEPTION(std::runtime_error("A PostgreSQL table dump file (--dump-file) must be provided."));
   }
 
-  if ((vm.count("xml") + vm.count("history-xml") +
-       vm.count("pbf") + vm.count("history-pbf") + 
-       vm.count("changesets") + vm.count("changeset-discussions") +
-       vm.count("xml-no-userinfo") + vm.count("history-xml-no-userinfo") +
-       vm.count("pbf-no-userinfo") + vm.count("history-pbf-no-userinfo") + 
-       vm.count("changesets-no-userinfo") + vm.count("changeset-discussions-no-userinfo") +
-       vm.count("gpx")) == 0) {
+  if (!has_osm_output(vm) && (vm.count("gpx") == 0)) {
     std::cerr <<
       "No output file provided! You must provide one or more of "
       "--xml, --history-xml, --pbf, --history-pbf, --changesets, "
@@ -141,9 +147,6 @@ bt::ptime setup_databases(const std::string &dump_file, bool resume, unsigned in
   
 #define THREAD_RUN(type,table) threads.push_back(boost::make_shared<run_thread<type> >(table, dump_file, resume, max_concurrency))
 
-  // users are needed by every output.
-  THREAD_RUN(user, "users");
-
   // the OSM tables are only read when an OSM output is asked for, so a GPX
   // dump can run on its own, from a dump file with only the GPS tables.
   if (with_osm) {
@@ -159,6 +162,7 @@ bt::ptime setup_databases(const std::string &dump_file, bool resume, unsigned in
     THREAD_RUN(way_node, "way_nodes");
     THREAD_RUN(relation_member, "relation_members");
 
+    THREAD_RUN(user, "users");
     THREAD_RUN(changeset_comment, "changeset_comments");
   }
 
@@ -197,20 +201,16 @@ int main(int argc, char *argv[]) {
     unsigned int max_concurrency = options["max-concurrency"].as<unsigned int>();
     const std::string dump_file(options["dump-file"].as<std::string>());
     const bool with_gpx = options.count("gpx") > 0;
-    const bool with_osm = (options.count("xml") + options.count("history-xml") +
-                           options.count("pbf") + options.count("history-pbf") +
-                           options.count("changesets") + options.count("changeset-discussions") +
-                           options.count("xml-no-userinfo") + options.count("history-xml-no-userinfo") +
-                           options.count("pbf-no-userinfo") + options.count("history-pbf-no-userinfo") +
-                           options.count("changesets-no-userinfo") +
-                           options.count("changeset-discussions-no-userinfo")) > 0;
+    const bool with_osm = has_osm_output(options);
     const bt::ptime max_time = setup_databases(dump_file, resume, max_concurrency, with_osm, with_gpx);
 
     // users aren't dumped directly to the files. we only use them to build up a map
     // of uid -> name where a missing uid indicates that the user doesn't have public
     // data.
     std::map<int64_t, std::string> display_name_map;
-    extract_users(display_name_map);
+    if (with_osm) {
+      extract_users(display_name_map);
+    }
 
     // build up a list of writers. these will be written to in parallel, which is
     // mildly wasteful if there's just one output type, but works great when all of

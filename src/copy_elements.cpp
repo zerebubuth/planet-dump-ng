@@ -180,6 +180,21 @@ template <>
 inline void fetch_associated<int>(int &, int64_t, int64_t, db_reader<int> &, std::vector<int> &) {
 }
 
+/**
+ * like fetch_associated, but for the GPS tables, which are keyed by gpx_id and
+ * have no version. reads all the rows up to gpx_id, and keeps the ones of
+ * gpx_id when they are wanted. has_row is false once the reader is empty.
+ */
+template <typename T>
+inline void fetch_gpx_rows(T &t, bool &has_row, int64_t gpx_id, bool wanted, db_reader<T> &reader, std::vector<T> &vec) {
+  while (has_row && (t.gpx_id <= gpx_id)) {
+    if (wanted && (t.gpx_id == gpx_id)) {
+      vec.push_back(t);
+    }
+    has_row = reader(t);
+  }
+}
+
 template <typename T>
 inline bool is_redacted(const T &t) { return bool(t.redaction_id); }
 
@@ -347,8 +362,9 @@ void write_gpx(gpx_writer &writer, const std::set<std::string> &visibilities) {
   gpx_file_tag tag;
   bool has_track = track_reader(track);
   bool has_tag = tag_reader(tag);
+
   std::vector<gpx_track> tracks;
-  std::vector<std::string> tags;
+  std::vector<gpx_file_tag> tags;
 
   // the three tables are sorted by gpx_id, so walk them together.
   while (file_reader(file)) {
@@ -356,25 +372,8 @@ void write_gpx(gpx_writer &writer, const std::set<std::string> &visibilities) {
     tracks.clear();
     tags.clear();
 
-    while (has_track && (track.gpx_id < file.id)) {
-      has_track = track_reader(track);
-    }
-    while (has_track && (track.gpx_id == file.id)) {
-      if (wanted) {
-        tracks.push_back(track);
-      }
-      has_track = track_reader(track);
-    }
-
-    while (has_tag && (tag.gpx_id < file.id)) {
-      has_tag = tag_reader(tag);
-    }
-    while (has_tag && (tag.gpx_id == file.id)) {
-      if (wanted) {
-        tags.push_back(tag.tag);
-      }
-      has_tag = tag_reader(tag);
-    }
+    fetch_gpx_rows(track, has_track, file.id, wanted, track_reader, tracks);
+    fetch_gpx_rows(tag, has_tag, file.id, wanted, tag_reader, tags);
 
     if (wanted && !tracks.empty()) {
       writer.trace(file, tracks, tags);
