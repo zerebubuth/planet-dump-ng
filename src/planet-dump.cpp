@@ -113,7 +113,8 @@ static void get_options(int argc, char **argv, po::variables_map &vm) {
   
   if (vm.count("gpx")) {
     BOOST_FOREACH(const std::string &v, vm["gpx-visibility"].as<std::vector<std::string> >()) {
-      // private and public traces must never be in a dump.
+      // public and private traces are still in the database, but they are
+      // never dumped.
       if ((v != "identifiable") && (v != "trackable")) {
         std::cerr << "Invalid --gpx-visibility '" << v << "', use identifiable or trackable.\n";
         exit(1);
