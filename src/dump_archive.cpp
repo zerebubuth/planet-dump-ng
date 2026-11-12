@@ -128,3 +128,6 @@ template struct run_thread<way_node>;
 template struct run_thread<relation>;
 template struct run_thread<relation_member>;
 template struct run_thread<changeset_comment>;
+template struct run_thread<gpx_file>;
+template struct run_thread<gpx_track>;
+template struct run_thread<gpx_file_tag>;

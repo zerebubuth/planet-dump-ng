@@ -12,6 +12,7 @@ ___planet_dump_ng_SOURCES=\
 	dump_archive.cpp \
 	dump_reader.cpp \
 	extract_kv.cpp \
+	gpx_writer.cpp \
 	history_filter.cpp \
 	insert_kv.cpp \
 	output_writer.cpp \
@@ -19,4 +20,5 @@ ___planet_dump_ng_SOURCES=\
 	planet-dump.cpp \
 	time_epoch.cpp \
 	types.cpp \
+	writer_common.cpp \
 	xml_writer.cpp

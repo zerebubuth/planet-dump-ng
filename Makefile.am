@@ -10,7 +10,9 @@ TESTS = \
 	test/changesets-empty.xml.case \
 	test/discussions.xml.case \
 	test/discussions-badchar.xml.case \
-	test/discussions-long-comment.xml.case
+	test/discussions-long-comment.xml.case \
+	test/gpx.xml.case \
+	test/gpx-trackable.xml.case
 TEST_EXTENSIONS = .case
 CASE_LOG_COMPILER = test/test-case-runner.sh
 

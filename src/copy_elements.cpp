@@ -1,4 +1,5 @@
 #include "copy_elements.hpp"
+#include "gpx_writer.hpp"
 #include "insert_kv.hpp"
 #include "types.hpp"
 #include "config.h"
@@ -179,6 +180,21 @@ template <>
 inline void fetch_associated<int>(int &, int64_t, int64_t, db_reader<int> &, std::vector<int> &) {
 }
 
+/**
+ * like fetch_associated, but for the GPS tables, which are keyed by gpx_id and
+ * have no version. reads all the rows up to gpx_id, and keeps the ones of
+ * gpx_id when they are wanted. has_row is false once the reader is empty.
+ */
+template <typename T>
+inline void fetch_gpx_rows(T &t, bool &has_row, int64_t gpx_id, bool wanted, db_reader<T> &reader, std::vector<T> &vec) {
+  while (has_row && (t.gpx_id <= gpx_id)) {
+    if (wanted && (t.gpx_id == gpx_id)) {
+      vec.push_back(t);
+    }
+    has_row = reader(t);
+  }
+}
+
 template <typename T>
 inline bool is_redacted(const T &t) { return bool(t.redaction_id); }
 
@@ -332,6 +348,35 @@ void extract_users(std::map<int64_t, std::string> &display_name_map) {
   while (reader(u)) {
     if (u.data_public) {
       display_name_map.insert(std::make_pair(u.id, u.display_name));
+    }
+  }
+}
+
+void write_gpx(gpx_writer &writer, const std::set<std::string> &visibilities) {
+  db_reader<gpx_file> file_reader("gpx_files");
+  db_reader<gpx_track> track_reader("gpx_tracks");
+  db_reader<gpx_file_tag> tag_reader("gpx_file_tags");
+
+  gpx_file file;
+  gpx_track track;
+  gpx_file_tag tag;
+  bool has_track = track_reader(track);
+  bool has_tag = tag_reader(tag);
+
+  std::vector<gpx_track> tracks;
+  std::vector<gpx_file_tag> tags;
+
+  // the three tables are sorted by gpx_id, so walk them together.
+  while (file_reader(file)) {
+    const bool wanted = file.visible && (visibilities.count(file.visibility) > 0);
+    tracks.clear();
+    tags.clear();
+
+    fetch_gpx_rows(track, has_track, file.id, wanted, track_reader, tracks);
+    fetch_gpx_rows(tag, has_tag, file.id, wanted, tag_reader, tags);
+
+    if (wanted && !tracks.empty()) {
+      writer.trace(file, tracks, tags);
     }
   }
 }
