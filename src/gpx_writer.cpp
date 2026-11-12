@@ -355,6 +355,7 @@ void gpx_writer::trace(const gpx_file &file, const std::vector<gpx_track> &track
     m_impl->element("desc", file.description);
   }
   m_impl->element("osm:id", file.id);
+  m_impl->element("osm:timestamp", file.timestamp);
   if (identifiable) {
     BOOST_FOREACH(const gpx_file_tag &tag, tags) {
       m_impl->element("osm:tag", tag.tag);

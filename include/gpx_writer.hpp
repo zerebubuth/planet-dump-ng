@@ -11,8 +11,8 @@
 
 /**
  * writes GPS traces to a GPX 1.0 file: one <trk> per trace and one <trkseg>
- * per trackid. every trace has its id as osm:id. identifiable traces also
- * have name, description and tags.
+ * per trackid. every trace has its id as osm:id and its upload time as
+ * osm:timestamp. identifiable traces also have name, description and tags.
  */
 class gpx_writer : private boost::noncopyable {
 public:
